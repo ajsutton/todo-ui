@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TODOs</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <h1>TODOs</h1>
+      <span id="connection-status" class="status-indicator"></span>
+    </div>
+    <div class="actions">
+      <button id="refresh-all" class="btn">Refresh All PRs</button>
+    </div>
+  </header>
+
+  <div class="filters">
+    <select id="filter-type">
+      <option value="">All Types</option>
+      <option value="Review">Review</option>
+      <option value="PR">PR</option>
+      <option value="Workstream">Workstream</option>
+      <option value="Slack">Slack</option>
+    </select>
+    <select id="filter-status">
+      <option value="">All Statuses</option>
+      <option value="active" selected>Active</option>
+      <option value="done">Done</option>
+    </select>
+  </div>
+
+  <table id="todo-table">
+    <thead>
+      <tr>
+        <th data-sort="id">ID</th>
+        <th data-sort="description">Description</th>
+        <th data-sort="type">Type</th>
+        <th data-sort="status">Status</th>
+        <th data-sort="priority">Priority</th>
+        <th data-sort="due">Due</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="todo-body"></tbody>
+  </table>
+
+  <div id="detail-panel" class="detail-panel">
+    <div class="detail-header">
+      <h2 id="detail-title"></h2>
+      <button id="detail-close" class="btn-icon">&times;</button>
+    </div>
+    <div id="detail-content"></div>
+  </div>
+
+  <div id="claude-panel" class="claude-panel">
+    <div class="claude-input-row">
+      <input type="text" id="claude-prompt" placeholder="Ask Claude..." />
+      <button id="claude-send" class="btn">Send</button>
+    </div>
+    <div class="quick-actions">
+      <button class="quick-action btn-small" data-prompt="update the status of all open TODOs">Update All</button>
+      <button class="quick-action btn-small" data-prompt="update the status of all review requests">Update Reviews</button>
+    </div>
+    <div id="claude-spinner" class="claude-spinner hidden"><span class="spinner"></span> Thinking...</div>
+    <pre id="claude-output" class="hidden"></pre>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
