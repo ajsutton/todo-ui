@@ -35,6 +35,7 @@ function readTodoDirFromConfig(): string {
 }
 
 const PORT = parseInt(process.env.TODO_UI_PORT ?? "3456", 10);
+const HOST = process.env.TODO_UI_HOST ?? "127.0.0.1";
 const CLAUDE_CWD = process.env.CLAUDE_CWD ?? process.cwd();
 const PUBLIC_DIR = path.join(import.meta.dir, "..", "public");
 
@@ -88,7 +89,7 @@ function extractIdFromPath(pathname: string, prefix: string): string | undefined
 }
 
 const server = Bun.serve({
-  hostname: "0.0.0.0",
+  hostname: HOST,
   port: PORT,
 
   async fetch(req) {
@@ -290,4 +291,4 @@ const server = Bun.serve({
   },
 });
 
-console.log(`TODO UI server listening on http://0.0.0.0:${PORT}`);
+console.log(`TODO UI server listening on http://${HOST}:${PORT}`);

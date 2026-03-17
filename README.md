@@ -56,6 +56,8 @@ bun src/server.ts
 
 Open `http://localhost:3456` (default port, configurable via `$TODO_UI_PORT`).
 
+**Warning:** The server has no authentication. It binds to `127.0.0.1` by default and should not be exposed to untrusted networks. Set `$TODO_UI_HOST` to override the listen address (e.g. `0.0.0.0` for containers).
+
 ## URL Parameters
 
 | Param    | Default    | Description                        |
