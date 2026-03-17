@@ -21,6 +21,7 @@ A real-time TODO dashboard built with Bun and vanilla JavaScript.
 |----------|------------|------------------------------------|
 | `type`   | (all)      | Filter by type (Review, PR, etc.)  |
 | `status` | `active`   | `active`, `done`, or `all`         |
+| `search` | (none)     | Full-text search on description    |
 | `sort`   | `priority` | Sort column                        |
 | `dir`    | `asc`      | Sort direction (`asc` or `desc`)   |
 | `detail` | (none)     | ID of open detail panel            |

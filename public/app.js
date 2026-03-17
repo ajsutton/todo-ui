@@ -4,6 +4,7 @@ function getUrlParams() {
   return {
     filterType: p.get('type') || '',
     filterStatus: p.has('status') ? (p.get('status') === 'all' ? '' : p.get('status')) : 'active',
+    searchQuery: p.get('search') || '',
     sortColumn: p.get('sort') || 'priority',
     sortDirection: p.get('dir') || 'asc',
     detailId: p.get('detail') || '',
@@ -14,6 +15,7 @@ function syncUrl() {
   const p = new URLSearchParams();
   if (filterType) p.set('type', filterType);
   if (filterStatus !== 'active') p.set('status', filterStatus || 'all');
+  if (searchQuery) p.set('search', searchQuery);
   if (sortColumn !== 'priority') p.set('sort', sortColumn);
   if (sortDirection !== 'asc') p.set('dir', sortDirection);
   const detailPanel = document.getElementById('detail-panel');
@@ -32,6 +34,7 @@ let sortColumn = urlParams.sortColumn;
 let sortDirection = urlParams.sortDirection;
 let filterType = urlParams.filterType;
 let filterStatus = urlParams.filterStatus;
+let searchQuery = urlParams.searchQuery;
 let ws = null;
 let reconnectAttempts = 0;
 
@@ -201,10 +204,12 @@ function sortItems(items) {
 
 // Filtering
 function filterItems(items) {
+  const query = searchQuery.trim().toLowerCase();
   return items.filter(item => {
     if (filterType && item.type !== filterType) return false;
     if (filterStatus === 'active' && item.doneDate) return false;
     if (filterStatus === 'done' && !item.doneDate) return false;
+    if (query && !item.description.toLowerCase().includes(query)) return false;
     return true;
   });
 }
@@ -514,6 +519,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (initialTh) initialTh.classList.add('sort-asc');
 
   // Restore filter dropdowns from URL state
+  document.getElementById('filter-search').value = searchQuery;
   document.getElementById('filter-type').value = filterType;
   document.getElementById('filter-status').value = filterStatus;
 
@@ -530,6 +536,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Filters
+  document.getElementById('filter-search').oninput = (e) => { searchQuery = e.target.value; renderTable(); };
   document.getElementById('filter-type').onchange = (e) => { filterType = e.target.value; renderTable(); };
   document.getElementById('filter-status').onchange = (e) => { filterStatus = e.target.value; renderTable(); };
 
