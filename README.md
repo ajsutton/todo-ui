@@ -22,17 +22,39 @@ mise install
 bun install
 ```
 
+## Configuration
+
+The server and Claude skill both read the TODO directory from `~/.claude/todo-config.json`:
+
+```json
+{ "todoDir": "/absolute/path/to/your/todo/directory" }
+```
+
+The server watches this file and switches directories on the fly when it changes — no restart needed. If the file doesn't exist yet, the server will pick it up when it's first created.
+
+Fallback order: `~/.claude/todo-config.json` > `$TODO_DIR` env var > `plans/todo/` in CWD.
+
+## Claude Code Skill
+
+This repo includes a Claude Code skill (`.claude/skills/todo/`) for managing TODOs conversationally. To make it available globally, symlink it into your user skills:
+
+```bash
+ln -s /path/to/todo-ui/.claude/skills/todo ~/.claude/skills/todo
+```
+
+On first use, the skill will ask where to store your TODO data and save the path to `~/.claude/todo-config.json`.
+
 ## Usage
 
 ```bash
-# Start the server (watches the current directory for TODO.md)
-bun src/server.ts [TODO_DIR]
+# Start the server
+bun src/server.ts
 
 # Or use the restart script
 ./restart.sh
 ```
 
-Open `http://localhost:3000` (default port).
+Open `http://localhost:3456` (default port, configurable via `$TODO_UI_PORT`).
 
 ## URL Parameters
 

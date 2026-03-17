@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import path from "node:path";
+import { watch, readFileSync, existsSync } from "node:fs";
 import { TodoWatcher } from "./lib/watcher.ts";
 import {
   markComplete,
@@ -12,12 +13,49 @@ import {
 } from "./lib/actions.ts";
 import type { WsMessage } from "./types.ts";
 
-const TODO_DIR = process.env.TODO_DIR ?? path.join(process.cwd(), "plans/todo");
+const TODO_CONFIG_PATH = path.join(
+  process.env.HOME ?? "~",
+  ".claude",
+  "todo-config.json",
+);
+const DEFAULT_TODO_DIR = path.join(process.cwd(), "plans/todo");
+
+function readTodoDirFromConfig(): string {
+  try {
+    if (existsSync(TODO_CONFIG_PATH)) {
+      const config = JSON.parse(readFileSync(TODO_CONFIG_PATH, "utf-8")) as {
+        todoDir?: string;
+      };
+      if (config.todoDir) return config.todoDir;
+    }
+  } catch {
+    // Fall through to defaults
+  }
+  return process.env.TODO_DIR ?? DEFAULT_TODO_DIR;
+}
+
 const PORT = parseInt(process.env.TODO_UI_PORT ?? "3456", 10);
 const CLAUDE_CWD = process.env.CLAUDE_CWD ?? process.cwd();
 const PUBLIC_DIR = path.join(import.meta.dir, "..", "public");
 
-const watcher = new TodoWatcher(TODO_DIR);
+const watcher = new TodoWatcher(readTodoDirFromConfig());
+
+// Watch the config file for changes and switch directories
+const configDir = path.dirname(TODO_CONFIG_PATH);
+if (existsSync(configDir)) {
+  watch(configDir, (_event, filename) => {
+    if (filename !== path.basename(TODO_CONFIG_PATH)) return;
+    const newDir = readTodoDirFromConfig();
+    if (newDir !== watcher.getDir()) {
+      console.log(`Config changed, switching TODO dir to ${newDir}`);
+      try {
+        watcher.switchDir(newDir);
+      } catch (err) {
+        console.error(`Failed to switch to ${newDir}:`, err);
+      }
+    }
+  });
+}
 
 type WS = Bun.ServerWebSocket<unknown>;
 const clients = new Set<WS>();
@@ -92,7 +130,7 @@ const server = Bun.serve({
       const id = extractIdFromPath(pathname, "/api/complete/");
       if (!id) return jsonResponse({ error: "Missing id" }, 400);
       try {
-        markComplete(TODO_DIR, id);
+        markComplete(watcher.getDir(), id);
         watcher.reload();
         return jsonResponse({ ok: true });
       } catch (err) {
@@ -105,7 +143,7 @@ const server = Bun.serve({
       const id = extractIdFromPath(pathname, "/api/incomplete/");
       if (!id) return jsonResponse({ error: "Missing id" }, 400);
       try {
-        markIncomplete(TODO_DIR, id);
+        markIncomplete(watcher.getDir(), id);
         watcher.reload();
         return jsonResponse({ ok: true });
       } catch (err) {
@@ -120,7 +158,7 @@ const server = Bun.serve({
       try {
         const body = (await req.json()) as { priority?: string };
         if (!body.priority) return jsonResponse({ error: "Missing priority" }, 400);
-        setPriority(TODO_DIR, id, body.priority);
+        setPriority(watcher.getDir(), id, body.priority);
         watcher.reload();
         return jsonResponse({ ok: true });
       } catch (err) {
@@ -134,7 +172,7 @@ const server = Bun.serve({
       if (!id) return jsonResponse({ error: "Missing id" }, 400);
       try {
         const body = (await req.json()) as { due?: string };
-        setDue(TODO_DIR, id, body.due ?? "");
+        setDue(watcher.getDir(), id, body.due ?? "");
         watcher.reload();
         return jsonResponse({ ok: true });
       } catch (err) {
@@ -146,7 +184,7 @@ const server = Bun.serve({
     if (req.method === "POST" && pathname === "/api/refresh") {
       try {
         const state = watcher.getState();
-        const results = await refreshAllPrStatuses(TODO_DIR, state.items);
+        const results = await refreshAllPrStatuses(watcher.getDir(), state.items);
         watcher.reload();
         const resultObj: Record<string, string> = {};
         for (const [k, v] of results) {
@@ -164,7 +202,7 @@ const server = Bun.serve({
       if (!id) return jsonResponse({ error: "Missing id" }, 400);
       try {
         const state = watcher.getState();
-        const result = await refreshPrStatus(TODO_DIR, id, state.items);
+        const result = await refreshPrStatus(watcher.getDir(), id, state.items);
         watcher.reload();
         return jsonResponse({ ok: true, result });
       } catch (err) {

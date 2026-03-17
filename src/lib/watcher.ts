@@ -80,6 +80,41 @@ export class TodoWatcher {
     this.notifyAll();
   }
 
+  switchDir(todoDir: string): void {
+    if (todoDir === this.todoDir) return;
+    this.watcher.close();
+    if (this.debounceTimer !== undefined) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = undefined;
+    }
+    this.todoDir = todoDir;
+    this.todoFilePath = path.join(todoDir, "TODO.md");
+    this.detailCache.clear();
+    this.state = this.readAndParse();
+    this.watcher = watch(todoDir, { recursive: false }, (_event, filename) => {
+      if (this.debounceTimer !== undefined) {
+        clearTimeout(this.debounceTimer);
+      }
+      if (filename && filename.startsWith("TODO-") && filename.endsWith(".md")) {
+        const id = filename.replace(".md", "");
+        this.detailCache.delete(id);
+      }
+      this.debounceTimer = setTimeout(() => {
+        this.debounceTimer = undefined;
+        const newState = this.readAndParse();
+        if (newState.rawMarkdown !== this.state.rawMarkdown) {
+          this.state = newState;
+          this.notifyAll();
+        }
+      }, 100);
+    });
+    this.notifyAll();
+  }
+
+  getDir(): string {
+    return this.todoDir;
+  }
+
   close(): void {
     if (this.debounceTimer !== undefined) {
       clearTimeout(this.debounceTimer);
