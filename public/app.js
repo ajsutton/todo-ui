@@ -209,7 +209,10 @@ function filterItems(items) {
     if (filterType && item.type !== filterType) return false;
     if (filterStatus === 'active' && item.doneDate) return false;
     if (filterStatus === 'done' && !item.doneDate) return false;
-    if (query && !item.description.toLowerCase().includes(query) && !item.id.toLowerCase().includes(query)) return false;
+    if (query) {
+      const searchable = [item.id, item.description, item.type, item.status, item.priority, item.due].join(' ').toLowerCase();
+      if (!searchable.includes(query)) return false;
+    }
     return true;
   });
 }
