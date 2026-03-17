@@ -90,7 +90,6 @@ When the user asks to import their Slack "saved for later" items:
    - **PR** (approved) → `Merge: <repo>#<number> <title>`
    - **Issue** → `Implement: <repo>#<number> <title>`
    - **Workstream** → `Workstream: <title> (<progress>)`
-   - **Slack Saved** → `Saved: <description>`
    - **General** → just the description
    - **Process** → `Process: <title>`
    These prefixes are for display when listing — they are NOT stored in TODO.md. The stored description stays concise.
@@ -125,7 +124,6 @@ When performing a full status check (`/todo update`):
      - If user has submitted CHANGES_REQUESTED or COMMENTED without approval → status "[BLOCKED] Reviewed, awaiting author", priority P5
      - If user's review is pending (re-requested) → clear Done date if previously done, status "Pending"
      - Also note: CI status, merge conflicts, draft state
-   - **Slack Saved**: Skip during batch update (would need Slack API, not GitHub).
    - **Process**: Check against the defined process lifecycle.
 5. **Priority adjustments:** After updating statuses, adjust priorities based on the new state:
    - PR/Workstream items with PRs that are approved + CI passing → escalate to P1 (quick wins, just need to merge)
@@ -228,38 +226,6 @@ Track a PR the user has been asked to review.
 - Also done if the PR is merged (regardless of who approved) — set the Done date.
 - **Re-open if review is re-requested** — if the user's review is re-requested on GitHub after they already approved/reviewed, clear the Done date and set status back to Pending.
 
-### Slack Saved
-Track a Slack message the user saved for later. Use this type for general saved messages. **If the saved message is asking the user to review a PR, prefer the Review type instead** — record the Slack message link in the detail file alongside the PR link.
-
-**Detail file format for Slack Saved items:**
-```markdown
-# <Description>
-
-## Source
-- **Slack message:** <permalink to the Slack message>
-- **Channel:** #<channel-name>
-- **From:** <author>
-- **Saved:** <date>
-- **Reminder:** <reminder time, if set>
-
-## Context
-<Relevant excerpt or summary of the message>
-
-## Notes
-<Any additional context>
-```
-
-**Due date:** If the Slack message has a reminder time set, use that as the TODO due date. Otherwise, leave the due date empty.
-
-**Lifecycle:**
-- Pending → user acts on the saved item
-- Done when:
-  - User marks it done manually
-  - The message is no longer saved for later in Slack (removed from saved items)
-- **When marking done:** Ask the user if they also want the item removed from Slack's "saved for later" list. **NEVER remove from Slack saved without explicit user confirmation.** If confirmed, this is not currently possible via the Slack MCP tools — inform the user they'll need to unsave it manually in Slack.
-
-**Status checks:** During status updates, search Slack for `is:saved` and cross-reference with existing Slack Saved TODOs. If a saved message is no longer in the results, the user may have already handled it — flag it for review but don't auto-complete.
-
 ### Process
 Lifecycle defined by an external process (skill, doc, runbook). Derive steps from that process.
 
@@ -314,5 +280,3 @@ Rules:
 - Conservative GitHub API usage
 - The Done column (date) is the canonical "done" indicator — not the Status text
 - Delete rows with Done dates older than 30 days on any TODO.md operation
-- **Never remove a Slack saved item without explicit user confirmation** — always ask first when marking a Slack Saved TODO as done
-- Slack saved messages requesting PR reviews should be tracked as Review type, not Slack Saved
