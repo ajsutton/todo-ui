@@ -128,6 +128,17 @@ h1 {
   border-bottom: 1px solid var(--border);
 }
 
+#filter-search {
+  margin-left: auto;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--fg);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  width: 200px;
+}
+
 select {
   background: var(--input-bg);
   border: 1px solid var(--input-border);
