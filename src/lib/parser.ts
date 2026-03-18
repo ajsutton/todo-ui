@@ -4,10 +4,23 @@ const GITHUB_LINK_RE = /\[([^\]]+)\]\((https:\/\/github\.com\/[^)]+)\)\s*(.*)/;
 const GITHUB_URL_PARTS_RE = /github\.com\/([^/]+\/[^/]+)\/(?:pull|issues)\/(\d+)/;
 
 function renderDescriptionHtml(description: string): string {
-  return description.replace(
+  // First, convert markdown links to <a> tags
+  let html = description.replace(
     /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
     '<a href="$2">$1</a>',
   );
+  // Then linkify bare org/repo#123 references (skip existing <a> tags)
+  html = html.replace(
+    /(<a\b[^>]*>.*?<\/a>)|([\w.-]+\/[\w.-]+#\d+)/g,
+    (match, anchor, ref) => {
+      if (anchor) return anchor;
+      const hashIdx = ref.indexOf('#');
+      const repo = ref.slice(0, hashIdx);
+      const num = ref.slice(hashIdx + 1);
+      return `<a href="https://github.com/${repo}/issues/${num}" target="_blank" rel="noopener">${ref}</a>`;
+    },
+  );
+  return html;
 }
 
 function parseTableRow(row: string): string[] {

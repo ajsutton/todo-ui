@@ -4,6 +4,7 @@ A real-time TODO dashboard built with Bun and vanilla JavaScript.
 
 ## Non-Negotiables
 
+- **All tests must pass before committing.** Run `bun test` and verify zero failures. Never accept, skip, or ignore failing tests. If a test fails, fix it before committing.
 - **URL is the source of truth for UI state.** Reloading the page must return the user to the exact same view — filters, sort order, selected detail panel, and any other UI state must be persisted in URL query parameters. When adding new stateful UI features, always include them in `syncUrl()` and `getUrlParams()`.
 - **Default filter is "active".** When no status filter is specified in the URL, show only active (not done) items.
 

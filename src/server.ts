@@ -21,6 +21,8 @@ const TODO_CONFIG_PATH = path.join(
 const DEFAULT_TODO_DIR = path.join(process.cwd(), "plans/todo");
 
 function readTodoDirFromConfig(): string {
+  // Explicit env var takes precedence (used by tests)
+  if (process.env.TODO_DIR) return process.env.TODO_DIR;
   try {
     if (existsSync(TODO_CONFIG_PATH)) {
       const config = JSON.parse(readFileSync(TODO_CONFIG_PATH, "utf-8")) as {
@@ -29,9 +31,9 @@ function readTodoDirFromConfig(): string {
       if (config.todoDir) return config.todoDir;
     }
   } catch {
-    // Fall through to defaults
+    // Fall through to default
   }
-  return process.env.TODO_DIR ?? DEFAULT_TODO_DIR;
+  return DEFAULT_TODO_DIR;
 }
 
 const PORT = parseInt(process.env.TODO_UI_PORT ?? "3456", 10);
