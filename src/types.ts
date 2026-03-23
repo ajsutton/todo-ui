@@ -37,7 +37,18 @@ export type ClaudeChunk =
   | { kind: "text"; text: string }
   | { kind: "activity"; tool: string };
 
+export interface DiscoveredItem {
+  repo: string;
+  prNumber: number;
+  title: string;
+  url: string;
+  type: "PR" | "Review";
+  suggestedPriority: string;
+  author: string;
+}
+
 export type WsMessage =
   | { type: "state"; data: TodoState }
   | { type: "detail"; data: DetailFile }
-  | { type: "claude-status"; data: { requestId: string; status: "running" | "done" | "error"; output: string; activity?: string } };
+  | { type: "claude-status"; data: { requestId: string; status: "running" | "done" | "error"; output: string; activity?: string } }
+  | { type: "update-progress"; data: { current: number; total: number; phase: string; itemId?: string } };

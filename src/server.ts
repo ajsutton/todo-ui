@@ -8,9 +8,11 @@ import {
   setPriority,
   setDue,
   refreshPrStatus,
-  refreshAllPrStatuses,
+  updateAll,
+  addDiscoveredItems,
   runClaudePrompt,
 } from "./lib/actions.ts";
+import type { DiscoveredItem } from "./types.ts";
 import type { WsMessage } from "./types.ts";
 
 const TODO_CONFIG_PATH = path.join(
@@ -187,13 +189,28 @@ const server = Bun.serve({
     if (req.method === "POST" && pathname === "/api/refresh") {
       try {
         const state = watcher.getState();
-        const results = await refreshAllPrStatuses(watcher.getDir(), state.items);
+        const { results, discovered } = await updateAll(watcher.getDir(), state.items, (current, total, phase, itemId) => {
+          const data: { current: number; total: number; phase: string; itemId?: string } = { current, total, phase };
+          if (itemId) data.itemId = itemId;
+          broadcast({ type: "update-progress", data });
+        });
         watcher.reload();
-        const resultObj: Record<string, string> = {};
-        for (const [k, v] of results) {
-          resultObj[k] = v;
+        return jsonResponse({ ok: true, results, discovered });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return jsonResponse({ error: message }, 500);
+      }
+    }
+
+    if (req.method === "POST" && pathname === "/api/add-discovered") {
+      try {
+        const body = (await req.json()) as { items?: DiscoveredItem[] };
+        if (!body.items || !Array.isArray(body.items) || body.items.length === 0) {
+          return jsonResponse({ error: "Missing items array" }, 400);
         }
-        return jsonResponse({ ok: true, results: resultObj });
+        addDiscoveredItems(watcher.getDir(), body.items);
+        watcher.reload();
+        return jsonResponse({ ok: true, count: body.items.length });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return jsonResponse({ error: message }, 500);

@@ -81,6 +81,8 @@ function connectWebSocket() {
     if (msg.type === 'state') {
       state = msg.data;
       renderTable();
+    } else if (msg.type === 'update-progress') {
+      handleUpdateProgress(msg.data);
     } else if (msg.type === 'claude-status') {
       handleClaudeStatus(msg.data);
     }
@@ -157,6 +159,8 @@ function renderTable() {
     // Actions cell
     const tdActions = document.createElement('td');
     tdActions.classList.add('actions-cell');
+    const actionsWrap = document.createElement('div');
+    actionsWrap.className = 'actions-wrap';
 
     const toggleBtn = document.createElement('button');
     toggleBtn.textContent = isDone ? 'Undo' : 'Done';
@@ -165,7 +169,7 @@ function renderTable() {
       e.stopPropagation();
       if (isDone) markIncomplete(item.id); else markComplete(item.id);
     };
-    tdActions.appendChild(toggleBtn);
+    actionsWrap.appendChild(toggleBtn);
 
     if (item.githubUrl) {
       const refreshBtn = document.createElement('button');
@@ -173,9 +177,10 @@ function renderTable() {
       refreshBtn.className = 'btn-small';
       refreshBtn.id = 'refresh-' + item.id;
       refreshBtn.onclick = (e) => { e.stopPropagation(); refreshItem(item.id); };
-      tdActions.appendChild(refreshBtn);
+      actionsWrap.appendChild(refreshBtn);
     }
 
+    tdActions.appendChild(actionsWrap);
     tr.appendChild(tdActions);
     tbody.appendChild(tr);
   }
@@ -290,18 +295,211 @@ async function refreshItem(id) {
   }
 }
 
+function handleUpdateProgress(data) {
+  const progress = document.getElementById('update-progress');
+  const fill = document.getElementById('progress-fill');
+  const label = document.getElementById('progress-label');
+  progress.classList.remove('hidden');
+  const pct = data.total > 0 ? Math.round((data.current / data.total) * 100) : 0;
+  fill.style.width = pct + '%';
+  if (data.phase === 'Scanning for new items') {
+    label.textContent = 'Scanning for new items...';
+    fill.style.width = '100%';
+  } else {
+    label.textContent = data.current + '/' + data.total;
+  }
+}
+
 async function refreshAll() {
   const btn = document.getElementById('refresh-all');
+  const progress = document.getElementById('update-progress');
+  const fill = document.getElementById('progress-fill');
   btn.classList.add('loading');
   btn.disabled = true;
+  fill.style.width = '0%';
+  progress.classList.remove('hidden');
   try {
     const res = await fetch('/api/refresh', { method: 'POST' });
     if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    showUpdateDialog(data.results || [], data.discovered || []);
   } catch (err) {
-    console.error('Failed to refresh all:', err);
+    console.error('Failed to update all:', err);
   } finally {
     btn.classList.remove('loading');
     btn.disabled = false;
+    progress.classList.add('hidden');
+  }
+}
+
+function showUpdateDialog(results, discovered) {
+  const dialog = document.getElementById('update-dialog');
+  const content = document.getElementById('update-dialog-content');
+  const actions = document.getElementById('update-dialog-actions');
+  const title = document.getElementById('update-dialog-title');
+  content.innerHTML = '';
+
+  const hasChanges = results.length > 0;
+  const hasDiscovered = discovered.length > 0;
+
+  title.textContent = hasDiscovered ? 'Update Results' : 'Update Results';
+
+  // Changes section
+  if (hasChanges) {
+    const section = document.createElement('div');
+    section.className = 'discovery-section';
+    const h3 = document.createElement('h3');
+    h3.textContent = 'Changes';
+    section.appendChild(h3);
+
+    const ul = document.createElement('ul');
+    ul.className = 'changes-list';
+    for (const r of results) {
+      const li = document.createElement('li');
+      const idSpan = document.createElement('span');
+      idSpan.className = 'change-id';
+      idSpan.textContent = r.id;
+      li.appendChild(idSpan);
+
+      if (r.oldStatus !== r.newStatus) {
+        const oldSpan = document.createElement('span');
+        oldSpan.className = 'change-old';
+        oldSpan.textContent = r.oldStatus;
+        li.appendChild(oldSpan);
+
+        const arrow = document.createElement('span');
+        arrow.className = 'change-arrow';
+        arrow.textContent = '\u2192';
+        li.appendChild(arrow);
+
+        li.appendChild(document.createTextNode(r.newStatus));
+      }
+
+      if (r.oldPriority !== r.newPriority) {
+        li.appendChild(document.createTextNode(' (' + r.oldPriority + ' \u2192 ' + r.newPriority + ')'));
+      }
+
+      if (r.doneDateSet) {
+        const badge = document.createElement('span');
+        badge.className = 'change-done-badge';
+        badge.textContent = 'Done';
+        li.appendChild(badge);
+      }
+
+      ul.appendChild(li);
+    }
+    section.appendChild(ul);
+    content.appendChild(section);
+  } else {
+    const p = document.createElement('p');
+    p.className = 'no-changes';
+    p.textContent = 'All items up to date.';
+    content.appendChild(p);
+  }
+
+  // Discovered items section
+  if (hasDiscovered) {
+    const reviews = discovered.filter(d => d.type === 'Review');
+    const prs = discovered.filter(d => d.type === 'PR');
+
+    renderDiscoverySection(content, 'Review Requests', reviews);
+    renderDiscoverySection(content, 'Your PRs', prs);
+
+    // Show actions bar with select-all and add button
+    actions.classList.remove('hidden');
+    const selectAll = document.getElementById('discovery-select-all');
+    selectAll.checked = true;
+    selectAll.onchange = () => {
+      content.querySelectorAll('.discovery-item input[type="checkbox"]').forEach(cb => { cb.checked = selectAll.checked; });
+    };
+    content.addEventListener('change', (e) => {
+      if (e.target === selectAll) return;
+      if (!e.target.closest('.discovery-item')) return;
+      const all = content.querySelectorAll('.discovery-item input[type="checkbox"]');
+      selectAll.checked = [...all].every(cb => cb.checked);
+    });
+    dialog._discovered = discovered;
+  } else {
+    actions.classList.add('hidden');
+    dialog._discovered = [];
+  }
+
+  dialog.classList.remove('hidden');
+}
+
+function renderDiscoverySection(container, title, items) {
+  if (items.length === 0) return;
+  const section = document.createElement('div');
+  section.className = 'discovery-section';
+  const h3 = document.createElement('h3');
+  h3.textContent = title;
+  section.appendChild(h3);
+
+  for (const item of items) {
+    const row = document.createElement('label');
+    row.className = 'discovery-item';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = true;
+    cb.dataset.repo = item.repo;
+    cb.dataset.prNumber = item.prNumber;
+    row.appendChild(cb);
+
+    const info = document.createElement('div');
+    info.className = 'discovery-item-info';
+
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'discovery-item-title';
+    const link = document.createElement('a');
+    link.href = item.url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = item.repo.replace('ethereum-optimism/', '') + '#' + item.prNumber;
+    link.onclick = (e) => e.stopPropagation();
+    titleSpan.appendChild(link);
+    titleSpan.appendChild(document.createTextNode(' ' + item.title));
+    info.appendChild(titleSpan);
+
+    const meta = document.createElement('span');
+    meta.className = 'discovery-item-meta';
+    meta.textContent = item.type === 'Review' ? item.author + ' \u00b7 ' + item.suggestedPriority : item.suggestedPriority;
+    info.appendChild(meta);
+
+    row.appendChild(info);
+    section.appendChild(row);
+  }
+  container.appendChild(section);
+}
+
+function closeUpdateDialog() {
+  document.getElementById('update-dialog').classList.add('hidden');
+}
+
+async function addDiscoveredItems() {
+  const dialog = document.getElementById('update-dialog');
+  const content = document.getElementById('update-dialog-content');
+  const discovered = dialog._discovered || [];
+
+  const checked = new Set();
+  content.querySelectorAll('.discovery-item input[type="checkbox"]:checked').forEach(cb => {
+    checked.add(cb.dataset.repo + '#' + cb.dataset.prNumber);
+  });
+
+  const selected = discovered.filter(d => checked.has(d.repo + '#' + d.prNumber));
+  closeUpdateDialog();
+
+  if (selected.length === 0) return;
+
+  try {
+    const res = await fetch('/api/add-discovered', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: selected }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+  } catch (err) {
+    console.error('Failed to add discovered items:', err);
   }
 }
 
@@ -543,8 +741,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('filter-type').onchange = (e) => { filterType = e.target.value; renderTable(); };
   document.getElementById('filter-status').onchange = (e) => { filterStatus = e.target.value; renderTable(); };
 
-  // Refresh all
+  // Refresh/update all
   document.getElementById('refresh-all').onclick = refreshAll;
+
+  // Update dialog
+  document.getElementById('discovery-skip').onclick = closeUpdateDialog;
+  document.getElementById('update-dialog-close').onclick = closeUpdateDialog;
+  document.getElementById('discovery-add').onclick = addDiscoveredItems;
 
   // Claude prompt
   const claudeInput = document.getElementById('claude-prompt');
@@ -590,9 +793,14 @@ document.addEventListener('DOMContentLoaded', () => {
     syncUrl();
   };
 
-  // Escape to close detail
+  // Escape to close panels/dialogs
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      const dialog = document.getElementById('update-dialog');
+      if (!dialog.classList.contains('hidden')) {
+        closeUpdateDialog();
+        return;
+      }
       document.getElementById('detail-panel').classList.remove('visible');
       syncUrl();
     }

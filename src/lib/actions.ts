@@ -1,15 +1,16 @@
-import { readFileSync, writeFileSync, renameSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync, existsSync, unlinkSync, readdirSync } from "node:fs";
 import path from "node:path";
-import type { TodoItem, GhPrStatus, ClaudeChunk } from "../types.ts";
+import type { TodoItem, GhPrStatus, ClaudeChunk, DiscoveredItem } from "../types.ts";
+
+const SEARCH_ORG = "ethereum-optimism";
 
 export function buildStatusString(ghStatus: GhPrStatus): string {
+  if (ghStatus.state === "MERGED") return "Merged";
+  if (ghStatus.state === "CLOSED") return "Closed";
+
   const parts: string[] = [];
 
-  if (ghStatus.state === "MERGED") {
-    parts.push("Merged");
-  } else if (ghStatus.state === "CLOSED") {
-    parts.push("Closed");
-  } else if (ghStatus.isDraft) {
+  if (ghStatus.isDraft) {
     parts.push("Draft");
   } else {
     parts.push("Open");
@@ -265,6 +266,513 @@ export async function refreshAllPrStatuses(
   });
 
   return results;
+}
+
+// --- Full /todo update logic ---
+
+interface GhReview {
+  user: { login: string };
+  state: string;
+  submitted_at?: string;
+}
+
+async function getGhUser(): Promise<string> {
+  const proc = Bun.spawn(["gh", "api", "user", "--jq", ".login"]);
+  const output = await new Response(proc.stdout).text();
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) throw new Error("Could not determine GitHub user");
+  return output.trim();
+}
+
+async function ghPrView(repo: string, number: number): Promise<Record<string, unknown> | null> {
+  const proc = Bun.spawn([
+    "gh", "pr", "view", String(number), "--repo", repo,
+    "--json", "state,isDraft,statusCheckRollup,reviewDecision,mergeable,mergeStateStatus,mergedAt,closedAt",
+  ]);
+  const output = await new Response(proc.stdout).text();
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) return null;
+  try { return JSON.parse(output); } catch { return null; }
+}
+
+async function ghIssueView(repo: string, number: number): Promise<Record<string, unknown> | null> {
+  const proc = Bun.spawn([
+    "gh", "issue", "view", String(number), "--repo", repo,
+    "--json", "state,title",
+  ]);
+  const output = await new Response(proc.stdout).text();
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) return null;
+  try { return JSON.parse(output); } catch { return null; }
+}
+
+async function ghUserReviews(repo: string, number: number): Promise<GhReview[]> {
+  const proc = Bun.spawn(["gh", "api", `repos/${repo}/pulls/${number}/reviews`]);
+  const output = await new Response(proc.stdout).text();
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) return [];
+  try { return JSON.parse(output) as GhReview[]; } catch { return []; }
+}
+
+function computeCiStatus(raw: Record<string, unknown>): string {
+  const rollup = raw["statusCheckRollup"];
+  if (!Array.isArray(rollup) || rollup.length === 0) return "";
+  const checks = rollup as Array<Record<string, unknown>>;
+  const getResult = (c: Record<string, unknown>): string =>
+    (c["conclusion"] as string) ?? (c["state"] as string) ?? "";
+  if (checks.some((c) => { const r = getResult(c); return r === "FAILURE" || r === "ERROR"; })) return "FAILURE";
+  if (checks.every((c) => getResult(c) === "SUCCESS")) return "SUCCESS";
+  return "PENDING";
+}
+
+export interface UpdateResult {
+  id: string;
+  oldStatus: string;
+  newStatus: string;
+  oldPriority: string;
+  newPriority: string;
+  doneDateSet: boolean;
+}
+
+/**
+ * Full /todo update: queries GitHub for every active PR/Review/Issue item,
+ * updates status + priority + done date, cleans up old done items.
+ */
+export type ProgressCallback = (current: number, total: number, phase: string, itemId?: string) => void;
+
+export async function updateAll(
+  todoDir: string,
+  items: TodoItem[],
+  onProgress?: ProgressCallback,
+): Promise<{ results: UpdateResult[]; discovered: DiscoveredItem[] }> {
+  const today = todayString();
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    .toISOString().slice(0, 10);
+
+  // Clean up items done > 30 days
+  for (const item of items) {
+    if (item.doneDate && item.doneDate < thirtyDaysAgo) {
+      const detailFile = path.join(todoDir, `${item.id}.md`);
+      if (existsSync(detailFile)) unlinkSync(detailFile);
+      // Remove the row from TODO.md
+      const filePath = path.join(todoDir, "TODO.md");
+      const content = readFileSync(filePath, "utf-8");
+      const lines = content.split("\n");
+      const filtered = lines.filter((l) => {
+        if (!l.trim().startsWith("|")) return true;
+        const cells = l.split("|");
+        return cells[1]?.trim() !== item.id;
+      });
+      atomicWrite(filePath, filtered.join("\n"));
+    }
+  }
+
+  // Remove PR/Review items that are already tracked in a workstream detail file
+  const workstreamKeys = collectTrackedKeys(todoDir, []);  // only detail files
+  const filePath = path.join(todoDir, "TODO.md");
+  {
+    const dupes = items.filter((i) =>
+      (i.type === "PR" || i.type === "Review") &&
+      i.repo && i.prNumber &&
+      workstreamKeys.has(`${i.repo}#${i.prNumber}`),
+    );
+    if (dupes.length > 0) {
+      let content = readFileSync(filePath, "utf-8");
+      const lines = content.split("\n");
+      const dupeIds = new Set(dupes.map((d) => d.id));
+      const filtered = lines.filter((l) => {
+        if (!l.trim().startsWith("|")) return true;
+        const cells = l.split("|");
+        return !dupeIds.has(cells[1]?.trim() ?? "");
+      });
+      atomicWrite(filePath, filtered.join("\n"));
+      // Remove from items array so they aren't processed
+      for (const dupe of dupes) {
+        const idx = items.indexOf(dupe);
+        if (idx !== -1) items.splice(idx, 1);
+      }
+    }
+  }
+
+  // Get GitHub user for review checks and discovery
+  let ghUser = "";
+  try { ghUser = await getGhUser(); } catch { /* proceed without */ }
+
+  // Update active items with GitHub references
+  const activeItems = items.filter((i) => !i.doneDate && i.repo && i.prNumber);
+  const results: UpdateResult[] = [];
+  const maxConcurrent = 5;
+  let running = 0;
+  let idx = 0;
+
+  const pendingUpdates = new Map<string, { status: string; priority: string; done: string; blocked: boolean }>();
+  let completed = 0;
+  const total = activeItems.length;
+
+  onProgress?.(0, total, "Checking GitHub status");
+
+  await new Promise<void>((resolve) => {
+    if (activeItems.length === 0) { resolve(); return; }
+
+    function launchNext(): void {
+      while (running < maxConcurrent && idx < activeItems.length) {
+        const item = activeItems[idx]!;
+        idx++;
+        running++;
+
+        (async () => {
+          try {
+            const result = await updateSingleItem(item, ghUser, today);
+            if (result) {
+              pendingUpdates.set(item.id, result.update);
+              results.push(result.summary);
+            }
+          } catch { /* skip individual failures */ }
+        })().finally(() => {
+          running--;
+          completed++;
+          onProgress?.(completed, total, "Checking GitHub status", item.id);
+          if (idx >= activeItems.length && running === 0) {
+            resolve();
+          } else {
+            launchNext();
+          }
+        });
+      }
+    }
+    launchNext();
+  });
+
+  // Apply all updates in a single write
+  if (pendingUpdates.size > 0) {
+    let content = readFileSync(filePath, "utf-8");
+    for (const [id, upd] of pendingUpdates) {
+      const updates = new Map<number, string>();
+      const statusVal = upd.blocked ? `[BLOCKED] ${upd.status}` : upd.status;
+      updates.set(CELL_STATUS, statusVal);
+      updates.set(CELL_PRIORITY, upd.priority);
+      if (upd.done) updates.set(CELL_DONE, upd.done);
+      content = replaceCells(content, id, updates);
+    }
+    atomicWrite(filePath, content);
+  }
+
+  // Discover new items
+  onProgress?.(total, total, "Scanning for new items");
+  const discovered = ghUser ? await discoverNewItems(todoDir, items, ghUser) : [];
+
+  return { results, discovered };
+}
+
+async function updateSingleItem(
+  item: TodoItem,
+  ghUser: string,
+  today: string,
+): Promise<{ update: { status: string; priority: string; done: string; blocked: boolean }; summary: UpdateResult } | null> {
+  const repo = item.repo!;
+  const number = item.prNumber!;
+  const oldStatus = item.blocked ? `[BLOCKED] ${item.status}` : item.status;
+  const oldPriority = item.priority;
+
+  if (item.type === "PR") {
+    const pr = await ghPrView(repo, number);
+    if (!pr) return null;
+    const ghStatus = parseGhPrJsonRaw(pr);
+    let statusStr = buildStatusString(ghStatus);
+    let priority = item.priority;
+    let done = "";
+    let blocked = false;
+
+    if (ghStatus.state === "MERGED") {
+      statusStr = "Merged";
+      done = today;
+      priority = "P1";
+    } else if (ghStatus.state === "CLOSED") {
+      statusStr = "Closed";
+      done = today;
+    } else if (!ghStatus.isDraft && ghStatus.reviewDecision === "APPROVED" && ghStatus.statusCheckRollup === "SUCCESS") {
+      priority = "P1"; // quick win
+    }
+
+    const newFullStatus = blocked ? `[BLOCKED] ${statusStr}` : statusStr;
+    if (newFullStatus === oldStatus && priority === oldPriority && !done) return null;
+
+    return {
+      update: { status: statusStr, priority, done, blocked },
+      summary: { id: item.id, oldStatus, newStatus: newFullStatus, oldPriority, newPriority: priority, doneDateSet: !!done },
+    };
+  }
+
+  if (item.type === "Review") {
+    const pr = await ghPrView(repo, number);
+    if (!pr) return null;
+    const state = pr["state"] as string;
+    const isDraft = pr["isDraft"] as boolean;
+    const ci = computeCiStatus(pr);
+    const mergeState = pr["mergeStateStatus"] as string ?? "";
+
+    let status = "";
+    let priority = item.priority;
+    let done = "";
+    let blocked = false;
+
+    if (state === "MERGED" || state === "CLOSED") {
+      status = state === "MERGED" ? "Merged" : "Closed";
+      done = today;
+    } else {
+      // Check user's review status
+      if (ghUser) {
+        const reviews = await ghUserReviews(repo, number);
+        const userReviews = reviews.filter((r) => r.user?.login === ghUser);
+        const latestState = userReviews.length > 0 ? userReviews[userReviews.length - 1]!.state : "NONE";
+
+        if (latestState === "APPROVED") {
+          status = "Approved";
+          done = today;
+        } else if (latestState === "CHANGES_REQUESTED" || latestState === "COMMENTED") {
+          status = "Reviewed, awaiting author";
+          priority = "P5";
+          blocked = true;
+        } else if (isDraft) {
+          status = "Draft, not ready for review";
+          priority = "P3";
+        } else {
+          status = "Pending";
+          if (ci === "FAILURE") {
+            status = "Pending, CI failing";
+            priority = "P3";
+          }
+        }
+      } else {
+        // No user info — just do basic status
+        const ghStatus = parseGhPrJsonRaw(pr);
+        status = buildStatusString(ghStatus);
+      }
+
+      if (mergeState === "DIRTY" && !blocked) {
+        status = `${status}, merge conflicts`;
+        priority = "P5";
+        blocked = true;
+      }
+    }
+
+    const newFullStatus = blocked ? `[BLOCKED] ${status}` : status;
+    if (newFullStatus === oldStatus && priority === oldPriority && !done) return null;
+
+    return {
+      update: { status, priority, done, blocked },
+      summary: { id: item.id, oldStatus, newStatus: newFullStatus, oldPriority, newPriority: priority, doneDateSet: !!done },
+    };
+  }
+
+  if (item.type === "Issue") {
+    const issue = await ghIssueView(repo, number);
+    if (!issue) return null;
+    const state = issue["state"] as string;
+    let status = item.status;
+    let done = "";
+
+    if (state === "CLOSED") {
+      status = "Closed";
+      done = today;
+    } else if (state === "OPEN") {
+      status = "Open";
+    }
+
+    if (status === oldStatus && !done) return null;
+
+    return {
+      update: { status, priority: item.priority, done, blocked: false },
+      summary: { id: item.id, oldStatus, newStatus: status, oldPriority: item.priority, newPriority: item.priority, doneDateSet: !!done },
+    };
+  }
+
+  return null; // Workstream, General, etc. — skip
+}
+
+function parseGhPrJsonRaw(raw: Record<string, unknown>): GhPrStatus {
+  return {
+    state: raw["state"] as string,
+    isDraft: raw["isDraft"] as boolean,
+    statusCheckRollup: computeCiStatus(raw),
+    reviewDecision: (raw["reviewDecision"] as string) ?? "",
+    mergeable: (raw["mergeable"] as string) ?? "",
+  };
+}
+
+// --- Discovery ---
+
+interface GhSearchItem {
+  repository_url: string;
+  number: number;
+  title: string;
+  html_url: string;
+  draft?: boolean;
+  user: { login: string };
+}
+
+async function ghSearchIssues(query: string): Promise<GhSearchItem[]> {
+  const proc = Bun.spawn(["gh", "api", `search/issues?q=${query}&per_page=50`]);
+  const output = await new Response(proc.stdout).text();
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) return [];
+  try {
+    const data = JSON.parse(output) as { items?: GhSearchItem[] };
+    return data.items ?? [];
+  } catch { return []; }
+}
+
+function collectTrackedKeys(todoDir: string, items: TodoItem[]): Set<string> {
+  const tracked = new Set<string>();
+
+  function addKey(repo: string, num: string | number): void {
+    // Normalize to full org/repo#N form
+    const r = String(repo);
+    const n = String(num);
+    const fullRepo = r.includes("/") ? r : `${SEARCH_ORG}/${r}`;
+    tracked.add(`${fullRepo}#${n}`);
+  }
+
+  // From parsed items
+  for (const item of items) {
+    if (item.repo && item.prNumber) {
+      addKey(item.repo, item.prNumber);
+    }
+  }
+
+  // From detail files — match short refs (repo#N), full refs (org/repo#N), and GitHub URLs
+  const shortHashPattern = /\[([a-zA-Z0-9_.-]+)#(\d+)\]/g;
+  const fullHashPattern = /([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)#(\d+)/g;
+  const urlPattern = /github\.com\/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)\/(?:pull|issues)\/(\d+)/g;
+  try {
+    const files = readdirSync(todoDir).filter(
+      (f) => f.startsWith("TODO-") && f.endsWith(".md"),
+    );
+    for (const file of files) {
+      const content = readFileSync(path.join(todoDir, file), "utf-8");
+      for (const m of content.matchAll(shortHashPattern)) {
+        addKey(m[1]!, m[2]!);
+      }
+      for (const m of content.matchAll(fullHashPattern)) {
+        addKey(m[1]!, m[2]!);
+      }
+      for (const m of content.matchAll(urlPattern)) {
+        addKey(m[1]!, m[2]!);
+      }
+    }
+  } catch { /* directory read failed — use what we have */ }
+
+  return tracked;
+}
+
+async function discoverNewItems(
+  todoDir: string,
+  items: TodoItem[],
+  ghUser: string,
+): Promise<DiscoveredItem[]> {
+  const tracked = collectTrackedKeys(todoDir, items);
+  const discovered: DiscoveredItem[] = [];
+
+  // Run both searches in parallel
+  const [myPrs, reviewRequests] = await Promise.all([
+    ghSearchIssues(`author:${ghUser}+is:open+is:pr+org:${SEARCH_ORG}`),
+    ghSearchIssues(`user-review-requested:${ghUser}+is:open+is:pr+draft:false+org:${SEARCH_ORG}`),
+  ]);
+
+  // Track review request keys to avoid duplicates with my PRs
+  const reviewKeys = new Set<string>();
+  for (const pr of reviewRequests) {
+    const repo = pr.repository_url.replace("https://api.github.com/repos/", "");
+    const key = `${repo}#${pr.number}`;
+    reviewKeys.add(key);
+    if (tracked.has(key)) continue;
+    discovered.push({
+      repo,
+      prNumber: pr.number,
+      title: pr.title,
+      url: pr.html_url,
+      type: "Review",
+      suggestedPriority: "P1",
+      author: pr.user.login,
+    });
+  }
+
+  for (const pr of myPrs) {
+    const repo = pr.repository_url.replace("https://api.github.com/repos/", "");
+    const key = `${repo}#${pr.number}`;
+    if (tracked.has(key) || reviewKeys.has(key)) continue;
+    discovered.push({
+      repo,
+      prNumber: pr.number,
+      title: pr.title,
+      url: pr.html_url,
+      type: "PR",
+      suggestedPriority: pr.draft ? "P3" : "P2",
+      author: pr.user.login,
+    });
+  }
+
+  return discovered;
+}
+
+export function addDiscoveredItems(todoDir: string, newItems: DiscoveredItem[]): void {
+  if (newItems.length === 0) return;
+
+  const filePath = path.join(todoDir, "TODO.md");
+  const content = readFileSync(filePath, "utf-8");
+  const lines = content.split("\n");
+
+  // Find the highest existing TODO-N id
+  let maxId = 0;
+  for (const line of lines) {
+    const match = line.match(/\|\s*TODO-(\d+)\s*\|/);
+    if (match) {
+      const num = parseInt(match[1]!, 10);
+      if (num > maxId) maxId = num;
+    }
+  }
+
+  // Find the last table row to insert after
+  let lastRowIdx = -1;
+  let inTable = false;
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i]!.trim();
+    if (trimmed.match(/^\|\s*ID/)) { inTable = true; continue; }
+    if (inTable && trimmed.match(/^\|\s*-+/)) continue;
+    if (inTable && trimmed.startsWith("|")) {
+      lastRowIdx = i;
+    } else if (inTable && !trimmed.startsWith("|")) {
+      break;
+    }
+  }
+
+  if (lastRowIdx === -1) {
+    // Table has no data rows — insert after the separator
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i]!.trim().match(/^\|\s*-+/)) {
+        lastRowIdx = i;
+        break;
+      }
+    }
+  }
+
+  // Build new rows
+  const newRows: string[] = [];
+  for (const item of newItems) {
+    maxId++;
+    const id = `TODO-${maxId}`;
+    // Short repo name: remove org prefix if it matches SEARCH_ORG
+    const shortRepo = item.repo.startsWith(`${SEARCH_ORG}/`)
+      ? item.repo.slice(SEARCH_ORG.length + 1)
+      : item.repo;
+    const desc = `[${shortRepo}#${item.prNumber}](${item.url}) ${item.title}${item.type === "Review" ? ` (${item.author})` : ""}`;
+    const status = item.type === "Review" ? "Pending" : "Open";
+    newRows.push(`| ${id} | ${desc} | ${item.type} | ${status} | ${item.suggestedPriority} | | |`);
+  }
+
+  // Insert after the last row
+  lines.splice(lastRowIdx + 1, 0, ...newRows);
+  atomicWrite(filePath, lines.join("\n"));
 }
 
 export async function* runClaudePrompt(

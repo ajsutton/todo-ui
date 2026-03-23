@@ -25,6 +25,8 @@ echo "Starting server (port $TODO_UI_PORT)..."
 TODO_DIR="$TODO_DIR" \
 CLAUDE_CWD="$CLAUDE_CWD" \
 TODO_UI_PORT="$TODO_UI_PORT" \
+TODO_UI_HOST="${TODO_UI_HOST:-0.0.0.0}" \
+GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}" \
 nohup bun src/server.ts > "$LOG" 2>&1 &
 
 sleep 1

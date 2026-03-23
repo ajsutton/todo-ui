@@ -119,6 +119,41 @@ h1 {
   background: var(--status-fail);
 }
 
+/* Update progress */
+.update-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.update-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-bar {
+  width: 120px;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.2s ease;
+  width: 0%;
+}
+
+.progress-label {
+  font-size: 12px;
+  color: var(--fg-secondary);
+  white-space: nowrap;
+}
+
 /* Filters */
 .filters {
   display: flex;
@@ -262,9 +297,13 @@ tr:hover td {
 
 /* Actions cell */
 .actions-cell {
-  display: flex;
+  white-space: nowrap;
+}
+
+.actions-cell .actions-wrap {
+  display: inline-flex;
   gap: 6px;
-  flex-wrap: nowrap;
+  align-items: center;
 }
 
 /* Buttons */
@@ -608,6 +647,165 @@ td.editable:hover {
 .date-picker input[type="date"]:focus {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
+}
+
+/* Discovery dialog */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+
+.dialog {
+  background: var(--panel-bg);
+  border-radius: 12px;
+  box-shadow: 0 8px 30px var(--shadow);
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.dialog-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+#update-dialog-content {
+  padding: 12px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.changes-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.changes-list li {
+  padding: 4px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.changes-list li:last-child {
+  border-bottom: none;
+}
+
+.change-id {
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.change-arrow {
+  color: var(--fg-secondary);
+  margin: 0 4px;
+}
+
+.change-old {
+  color: var(--fg-secondary);
+  text-decoration: line-through;
+}
+
+.change-done-badge {
+  display: inline-block;
+  background: var(--status-pass);
+  color: #fff;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 6px;
+}
+
+.no-changes {
+  color: var(--fg-secondary);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.discovery-section h3 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--fg-secondary);
+  margin: 12px 0 6px;
+}
+
+.discovery-section h3:first-child {
+  margin-top: 0;
+}
+
+.discovery-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.discovery-item:last-child {
+  border-bottom: none;
+}
+
+.discovery-item input[type="checkbox"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.discovery-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.discovery-item-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.discovery-item-meta {
+  color: var(--fg-secondary);
+  font-size: 12px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.select-all-label {
+  font-size: 13px;
+  color: var(--fg-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dialog-buttons {
+  display: flex;
+  gap: 8px;
 }
 
 /* Hidden utility */
