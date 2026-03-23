@@ -34,7 +34,7 @@ The user may say things like:
 - "add a todo" / "track this issue" / "add a review request"
 - "what's on my todo list?" / "show todos" / "what's due soon?"
 - **"update"** / "update todo status" / "check on my todos" / "refresh" → triggers a batch status refresh of all active PR/Review/Issue/Workstream items by querying GitHub for the latest state
-- **"today"** → show the most important items to focus on today. Filter to: P0 items, P1 items, items due today or overdue, and P2 items due today. Sort by effective priority. Keep the output concise and actionable — this is a "what should I do right now?" view, not the full list.
+- **"today"** → show the most important items to focus on today. First filter to **active items only** (empty Done column), then filter to: P0 items, P1 items, items due today or overdue, and P2 items due today. Sort by effective priority. Keep the output concise and actionable — this is a "what should I do right now?" view, not the full list.
 - "mark TODO-3 done" / "complete TODO-3" (sets Done date, does not change Status)
 - "undo TODO-3" / "mark TODO-3 not done" (clears Done date)
 - "work on TODO-5" / "what's next for TODO-5?"
@@ -45,7 +45,7 @@ The user may say things like:
 
 ## Rules
 
-- **Never auto-create todo items** without the user specifically requesting it. Creating from scans (slack, github) requires an explicit ask.
+- **Never auto-create todo items** without the user specifically requesting it or confirming during `/todo update`. The update flow may discover new PRs and review requests, but must present them for confirmation before adding.
 - **Never perform the next step on a TODO** without explicit request or confirmation from the user.
 - **Be conservative with GitHub API** to avoid rate limits. Batch queries where possible.
 - **Keep TODO.md minimal** — one line per item in a table. All general queries should be answerable from TODO.md alone.
@@ -132,6 +132,26 @@ When performing a full status check (`/todo update`):
 6. Write all changes to TODO.md in a single edit.
 7. Report a summary of changes to the user — only mention items whose status actually changed.
 
+#### Discovering New Items
+
+After updating existing items, scan GitHub for PRs and review requests not already tracked:
+
+1. **User's open PRs:** Query for the user's open PRs across relevant orgs:
+   ```
+   gh api 'search/issues?q=author:USERNAME+is:open+is:pr+org:ORG&per_page=50'
+   ```
+   For each PR found, check if it's already tracked in TODO.md (match by repo and PR number in any Description, or in any workstream detail file). Skip PRs that are already tracked.
+
+2. **Pending review requests:** Query for PRs where the user is individually requested:
+   ```
+   gh api 'search/issues?q=user-review-requested:USERNAME+is:open+is:pr+draft:false+org:ORG&per_page=50'
+   ```
+   Skip PRs already tracked as Review items.
+
+3. **Present new items to the user** with proposed type, priority, and description. Wait for confirmation before adding any. Group by category (your PRs, review requests) for readability.
+
+4. Add confirmed items to TODO.md and create detail files where useful.
+
 ### Working on a TODO
 
 When the user asks to work on or get next steps for a specific TODO:
@@ -184,6 +204,20 @@ A body of work that may span multiple PRs. Similar to a GitHub issue but may not
 2. Brainstorm / plan as needed
 3. Implement via PRs (tracked in detail file)
 4. Complete when all PRs merged and remaining work is empty
+
+**Completion invariants — a workstream TODO MUST NOT be marked done (Done date set) unless ALL of the following are true:**
+1. All items in "Remaining Work" are checked off (no unchecked `- [ ]` items)
+2. If the workstream has a linked GitHub issue, that issue is closed
+3. All PRs in the detail file are in a terminal state (Merged or Closed)
+
+If any invariant is violated during a status update, clear the Done date and set status to reflect what's actually remaining (e.g., "5/6 PRs merged, issue still open").
+
+**Sync between GitHub issue and detail file:** When updating a workstream's status:
+1. Read the detail file to get the linked GitHub issue and PR list
+2. Query GitHub for the current state of the issue and all PRs
+3. Update the detail file's PR table and Remaining Work to match GitHub reality
+4. Update the GitHub issue's checklist/body if it has drifted from the detail file (e.g., PRs merged but not checked off in the issue). Prefix the comment with "**Claude:**" per attribution rules.
+5. Update the TODO.md summary row to reflect the current state
 
 **Status updates:** When checking status, look up each PR in the detail file and update its status — including review/approval state (use `get_reviews` or check `mergeable_state`). PRs that are approved should be marked "Approved" so they surface as ready to merge rather than needing reviews. Summarize progress in the main TODO.md row.
 
