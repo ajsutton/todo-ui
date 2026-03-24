@@ -361,6 +361,23 @@ function showUpdateDialog(results, discovered) {
       idSpan.textContent = r.id;
       li.appendChild(idSpan);
 
+      if (r.githubUrl && r.repo && r.prNumber) {
+        const link = document.createElement('a');
+        link.href = r.githubUrl;
+        link.target = '_blank';
+        link.className = 'change-ref';
+        link.textContent = r.repo.replace('ethereum-optimism/', '') + '#' + r.prNumber;
+        li.appendChild(link);
+        // Extract title from description (strip the link prefix if present)
+        const title = r.description.replace(/^\[.*?\]\(.*?\)\s*/, '');
+        if (title) {
+          const titleSpan = document.createElement('span');
+          titleSpan.className = 'change-title';
+          titleSpan.textContent = title;
+          li.appendChild(titleSpan);
+        }
+      }
+
       if (r.oldStatus !== r.newStatus) {
         const oldSpan = document.createElement('span');
         oldSpan.className = 'change-old';

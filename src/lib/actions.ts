@@ -327,6 +327,10 @@ function computeCiStatus(raw: Record<string, unknown>): string {
 
 export interface UpdateResult {
   id: string;
+  description: string;
+  githubUrl: string | undefined;
+  repo: string | undefined;
+  prNumber: number | undefined;
   oldStatus: string;
   newStatus: string;
   oldPriority: string;
@@ -499,7 +503,7 @@ async function updateSingleItem(
 
     return {
       update: { status: statusStr, priority, done, blocked },
-      summary: { id: item.id, oldStatus, newStatus: newFullStatus, oldPriority, newPriority: priority, doneDateSet: !!done },
+      summary: { id: item.id, description: item.description, githubUrl: item.githubUrl, repo: item.repo, prNumber: item.prNumber, oldStatus, newStatus: newFullStatus, oldPriority, newPriority: priority, doneDateSet: !!done },
     };
   }
 
@@ -561,7 +565,7 @@ async function updateSingleItem(
 
     return {
       update: { status, priority, done, blocked },
-      summary: { id: item.id, oldStatus, newStatus: newFullStatus, oldPriority, newPriority: priority, doneDateSet: !!done },
+      summary: { id: item.id, description: item.description, githubUrl: item.githubUrl, repo: item.repo, prNumber: item.prNumber, oldStatus, newStatus: newFullStatus, oldPriority, newPriority: priority, doneDateSet: !!done },
     };
   }
 
@@ -583,7 +587,7 @@ async function updateSingleItem(
 
     return {
       update: { status, priority: item.priority, done, blocked: false },
-      summary: { id: item.id, oldStatus, newStatus: status, oldPriority: item.priority, newPriority: item.priority, doneDateSet: !!done },
+      summary: { id: item.id, description: item.description, githubUrl: item.githubUrl, repo: item.repo, prNumber: item.prNumber, oldStatus, newStatus: status, oldPriority: item.priority, newPriority: item.priority, doneDateSet: !!done },
     };
   }
 

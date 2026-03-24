@@ -712,6 +712,21 @@ td.editable:hover {
   margin-right: 4px;
 }
 
+.change-ref {
+  color: var(--link-color, #58a6ff);
+  margin-right: 6px;
+  text-decoration: none;
+}
+
+.change-ref:hover {
+  text-decoration: underline;
+}
+
+.change-title {
+  color: var(--fg-secondary);
+  margin-right: 6px;
+}
+
 .change-arrow {
   color: var(--fg-secondary);
   margin: 0 4px;
