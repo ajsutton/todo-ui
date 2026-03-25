@@ -322,9 +322,10 @@ async function refreshAll() {
     const res = await fetch('/api/refresh', { method: 'POST' });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
-    showUpdateDialog(data.results || [], data.discovered || []);
+    showUpdateDialog(data.results || [], data.discovered || [], data.errors || []);
   } catch (err) {
     console.error('Failed to update all:', err);
+    alert('Update failed: ' + (err.message || err));
   } finally {
     btn.classList.remove('loading');
     btn.disabled = false;
@@ -332,7 +333,8 @@ async function refreshAll() {
   }
 }
 
-function showUpdateDialog(results, discovered) {
+function showUpdateDialog(results, discovered, errors) {
+  errors = errors || [];
   const dialog = document.getElementById('update-dialog');
   const content = document.getElementById('update-dialog-content');
   const actions = document.getElementById('update-dialog-actions');
@@ -407,11 +409,38 @@ function showUpdateDialog(results, discovered) {
     }
     section.appendChild(ul);
     content.appendChild(section);
-  } else {
+  } else if (errors.length === 0) {
     const p = document.createElement('p');
     p.className = 'no-changes';
     p.textContent = 'All items up to date.';
     content.appendChild(p);
+  }
+
+  // Errors section
+  if (errors.length > 0) {
+    const section = document.createElement('div');
+    section.className = 'discovery-section errors-section';
+    const h3 = document.createElement('h3');
+    h3.textContent = 'Errors (' + errors.length + ')';
+    h3.style.color = 'var(--color-danger, #e53e3e)';
+    section.appendChild(h3);
+
+    const ul = document.createElement('ul');
+    ul.className = 'changes-list';
+    for (const e of errors) {
+      const li = document.createElement('li');
+      const idSpan = document.createElement('span');
+      idSpan.className = 'change-id';
+      idSpan.textContent = e.id;
+      li.appendChild(idSpan);
+      const errSpan = document.createElement('span');
+      errSpan.style.color = 'var(--color-danger, #e53e3e)';
+      errSpan.textContent = e.error;
+      li.appendChild(errSpan);
+      ul.appendChild(li);
+    }
+    section.appendChild(ul);
+    content.appendChild(section);
   }
 
   // Discovered items section

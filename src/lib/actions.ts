@@ -344,11 +344,17 @@ export interface UpdateResult {
  */
 export type ProgressCallback = (current: number, total: number, phase: string, itemId?: string) => void;
 
+export interface UpdateError {
+  id: string;
+  description: string;
+  error: string;
+}
+
 export async function updateAll(
   todoDir: string,
   items: TodoItem[],
   onProgress?: ProgressCallback,
-): Promise<{ results: UpdateResult[]; discovered: DiscoveredItem[] }> {
+): Promise<{ results: UpdateResult[]; discovered: DiscoveredItem[]; errors: UpdateError[] }> {
   const today = todayString();
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     .toISOString().slice(0, 10);
@@ -400,7 +406,10 @@ export async function updateAll(
 
   // Get GitHub user for review checks and discovery
   let ghUser = "";
-  try { ghUser = await getGhUser(); } catch { /* proceed without */ }
+  let ghUserError = "";
+  try { ghUser = await getGhUser(); } catch (err) {
+    ghUserError = err instanceof Error ? err.message : String(err);
+  }
 
   // Update active items with GitHub references
   const activeItems = items.filter((i) => !i.doneDate && i.repo && i.prNumber);
@@ -410,6 +419,7 @@ export async function updateAll(
   let idx = 0;
 
   const pendingUpdates = new Map<string, { status: string; priority: string; done: string; blocked: boolean }>();
+  const errors: UpdateError[] = [];
   let completed = 0;
   const total = activeItems.length;
 
@@ -431,7 +441,13 @@ export async function updateAll(
               pendingUpdates.set(item.id, result.update);
               results.push(result.summary);
             }
-          } catch { /* skip individual failures */ }
+          } catch (err) {
+            errors.push({
+              id: item.id,
+              description: item.description,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
         })().finally(() => {
           running--;
           completed++;
@@ -464,8 +480,11 @@ export async function updateAll(
   // Discover new items
   onProgress?.(total, total, "Scanning for new items");
   const discovered = ghUser ? await discoverNewItems(todoDir, items, ghUser) : [];
+  if (ghUserError) {
+    errors.push({ id: "(auth)", description: "GitHub authentication", error: `Could not determine GitHub user: ${ghUserError}` });
+  }
 
-  return { results, discovered };
+  return { results, discovered, errors };
 }
 
 async function updateSingleItem(

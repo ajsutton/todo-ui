@@ -189,13 +189,13 @@ const server = Bun.serve({
     if (req.method === "POST" && pathname === "/api/refresh") {
       try {
         const state = watcher.getState();
-        const { results, discovered } = await updateAll(watcher.getDir(), state.items, (current, total, phase, itemId) => {
+        const { results, discovered, errors } = await updateAll(watcher.getDir(), state.items, (current, total, phase, itemId) => {
           const data: { current: number; total: number; phase: string; itemId?: string } = { current, total, phase };
           if (itemId) data.itemId = itemId;
           broadcast({ type: "update-progress", data });
         });
         watcher.reload();
-        return jsonResponse({ ok: true, results, discovered });
+        return jsonResponse({ ok: true, results, discovered, errors });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return jsonResponse({ error: message }, 500);
