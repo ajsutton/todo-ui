@@ -799,7 +799,7 @@ function processFetchedItem(
     } else if (state === "OPEN") {
       const assignees = data.assignees;
       const isAssigned = ghUser && assignees?.some((a) => a.login === ghUser);
-      if (assignees && assignees.length > 0 && !isAssigned) {
+      if (ghUser && !isAssigned) {
         status = "Unassigned"; done = today;
       } else {
         status = "Open";
