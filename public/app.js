@@ -319,7 +319,7 @@ async function refreshAll() {
   fill.style.width = '0%';
   progress.classList.remove('hidden');
   try {
-    const res = await fetch('/api/refresh', { method: 'POST' });
+    const res = await fetch('/api/refresh', { method: 'POST', signal: AbortSignal.timeout(120000) });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
     showUpdateDialog(data.results || [], data.discovered || [], data.errors || []);

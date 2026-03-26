@@ -314,6 +314,150 @@ async function ghUserReviews(repo: string, number: number): Promise<GhReview[]> 
   try { return JSON.parse(output) as GhReview[]; } catch { return []; }
 }
 
+// --- Batch GitHub API ---
+
+interface BatchQuery {
+  key: string;           // unique alias for GraphQL
+  owner: string;
+  repo: string;
+  number: number;
+  isPr: boolean;         // true = PR, false = issue
+  needsReviews: boolean; // true = also fetch latest reviews
+}
+
+interface BatchResult {
+  // PR fields
+  state?: string;
+  isDraft?: boolean;
+  reviewDecision?: string;
+  mergeable?: string;
+  mergeStateStatus?: string;
+  statusCheckRollup?: Array<Record<string, unknown>>;
+  // Issue fields
+  assignees?: Array<{ login: string }>;
+  // Review fields (for Review items)
+  reviews?: GhReview[];
+}
+
+const BATCH_SIZE = 30; // GitHub GraphQL has a cost limit; ~30 nodes is safe
+
+async function ghBatchQuery(
+  queries: BatchQuery[],
+): Promise<Map<string, BatchResult>> {
+  const results = new Map<string, BatchResult>();
+  if (queries.length === 0) return results;
+
+  // Process in batches
+  for (let i = 0; i < queries.length; i += BATCH_SIZE) {
+    const batch = queries.slice(i, i + BATCH_SIZE);
+    const fragments: string[] = [];
+
+    for (const q of batch) {
+      if (q.isPr) {
+        fragments.push(`
+          ${q.key}: repository(owner: "${q.owner}", name: "${q.repo}") {
+            pullRequest(number: ${q.number}) {
+              state
+              isDraft
+              reviewDecision
+              mergeable
+              mergeStateStatus
+              statusCheckRollup: commits(last: 1) {
+                nodes {
+                  commit {
+                    statusCheckRollup {
+                      contexts(first: 100) {
+                        nodes {
+                          ... on CheckRun { conclusion }
+                          ... on StatusContext { state }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              ${q.needsReviews ? `reviews(last: 50) { nodes { author { login } state submittedAt } }` : ""}
+            }
+          }`);
+      } else {
+        fragments.push(`
+          ${q.key}: repository(owner: "${q.owner}", name: "${q.repo}") {
+            issue(number: ${q.number}) {
+              state
+              assignees(first: 20) { nodes { login } }
+            }
+          }`);
+      }
+    }
+
+    const query = `query { ${fragments.join("\n")} }`;
+    const proc = Bun.spawn(["gh", "api", "graphql", "-f", `query=${query}`]);
+    const output = await new Response(proc.stdout).text();
+    const exitCode = await proc.exited;
+    if (exitCode !== 0) continue;
+
+    let data: Record<string, Record<string, unknown>>;
+    try {
+      const parsed = JSON.parse(output) as { data?: Record<string, Record<string, unknown>> };
+      data = parsed.data ?? {};
+    } catch { continue; }
+
+    for (const q of batch) {
+      const repoData = data[q.key] as Record<string, Record<string, unknown>> | undefined;
+      if (!repoData) continue;
+
+      const node = q.isPr ? repoData["pullRequest"] : repoData["issue"];
+      if (!node) continue;
+
+      const result: BatchResult = {};
+
+      if (q.isPr) {
+        const pr = node as Record<string, unknown>;
+        result.state = pr["state"] as string;
+        result.isDraft = pr["isDraft"] as boolean;
+        result.reviewDecision = (pr["reviewDecision"] as string) ?? "";
+        result.mergeable = (pr["mergeable"] as string) ?? "";
+        result.mergeStateStatus = (pr["mergeStateStatus"] as string) ?? "";
+
+        // Extract status check rollup from commits
+        const commits = pr["statusCheckRollup"] as Record<string, unknown> | undefined;
+        const commitNodes = (commits?.["nodes"] as Array<Record<string, unknown>>) ?? [];
+        const lastCommit = commitNodes[0];
+        if (lastCommit) {
+          const rollup = (lastCommit["commit"] as Record<string, unknown>)?.["statusCheckRollup"] as Record<string, unknown> | undefined;
+          const contexts = rollup?.["contexts"] as Record<string, unknown> | undefined;
+          result.statusCheckRollup = (contexts?.["nodes"] as Array<Record<string, unknown>>) ?? [];
+        }
+
+        // Extract reviews
+        if (q.needsReviews) {
+          const reviewsData = pr["reviews"] as Record<string, unknown> | undefined;
+          const reviewNodes = (reviewsData?.["nodes"] as Array<Record<string, unknown>>) ?? [];
+          result.reviews = reviewNodes.map((r) => ({
+            user: { login: ((r["author"] as Record<string, unknown>)?.["login"] as string) ?? "" },
+            state: (r["state"] as string) ?? "",
+            submitted_at: (r["submittedAt"] as string) ?? "",
+          }));
+        }
+      } else {
+        const issue = node as Record<string, unknown>;
+        result.state = issue["state"] as string;
+        const assigneesData = issue["assignees"] as Record<string, unknown> | undefined;
+        result.assignees = ((assigneesData?.["nodes"] as Array<{ login: string }>) ?? []);
+      }
+
+      results.set(q.key, result);
+    }
+  }
+
+  return results;
+}
+
+function batchKeyFor(repo: string, number: number): string {
+  // GraphQL aliases must be valid identifiers
+  return `r_${repo.replace(/[^a-zA-Z0-9]/g, "_")}_${number}`;
+}
+
 function computeCiStatus(raw: Record<string, unknown>): string {
   const rollup = raw["statusCheckRollup"];
   if (!Array.isArray(rollup) || rollup.length === 0) return "";
@@ -377,8 +521,15 @@ export async function updateAll(
     }
   }
 
+  // Items done > 7 days ago — ignore their detail files for dedup and discovery
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    .toISOString().slice(0, 10);
+  const staleIds = new Set(
+    items.filter((i) => i.doneDate && i.doneDate < sevenDaysAgo).map((i) => i.id),
+  );
+
   // Remove PR/Review items that are already tracked in a workstream detail file
-  const workstreamKeys = collectTrackedKeys(todoDir, []);  // only detail files
+  const workstreamKeys = collectTrackedKeys(todoDir, [], staleIds);  // only detail files, skip stale
   const filePath = path.join(todoDir, "TODO.md");
   {
     const dupes = items.filter((i) =>
@@ -414,54 +565,52 @@ export async function updateAll(
   // Update active items with GitHub references
   const activeItems = items.filter((i) => !i.doneDate && i.repo && i.prNumber);
   const results: UpdateResult[] = [];
-  const maxConcurrent = 5;
-  let running = 0;
-  let idx = 0;
 
   const pendingUpdates = new Map<string, { status: string; priority: string; done: string; blocked: boolean }>();
   const errors: UpdateError[] = [];
-  let completed = 0;
   const total = activeItems.length;
 
   onProgress?.(0, total, "Checking GitHub status");
 
-  await new Promise<void>((resolve) => {
-    if (activeItems.length === 0) { resolve(); return; }
+  // Batch-fetch all PR/Issue data in one GraphQL call
+  const batchQueries: BatchQuery[] = [];
+  for (const item of activeItems) {
+    const [owner, repo] = item.repo!.split("/");
+    if (!owner || !repo) continue;
+    batchQueries.push({
+      key: batchKeyFor(item.repo!, item.prNumber!),
+      owner,
+      repo,
+      number: item.prNumber!,
+      isPr: item.type === "PR" || item.type === "Review",
+      needsReviews: item.type === "Review" && !!ghUser,
+    });
+  }
 
-    function launchNext(): void {
-      while (running < maxConcurrent && idx < activeItems.length) {
-        const item = activeItems[idx]!;
-        idx++;
-        running++;
+  const batchResults = await ghBatchQuery(batchQueries);
+  onProgress?.(Math.floor(total * 0.8), total, "Processing results");
 
-        (async () => {
-          try {
-            const result = await updateSingleItem(item, ghUser, today);
-            if (result) {
-              pendingUpdates.set(item.id, result.update);
-              results.push(result.summary);
-            }
-          } catch (err) {
-            errors.push({
-              id: item.id,
-              description: item.description,
-              error: err instanceof Error ? err.message : String(err),
-            });
-          }
-        })().finally(() => {
-          running--;
-          completed++;
-          onProgress?.(completed, total, "Checking GitHub status", item.id);
-          if (idx >= activeItems.length && running === 0) {
-            resolve();
-          } else {
-            launchNext();
-          }
-        });
+  // Process each item using pre-fetched data
+  for (const item of activeItems) {
+    try {
+      const key = batchKeyFor(item.repo!, item.prNumber!);
+      const data = batchResults.get(key);
+      if (!data) continue;
+      const result = processFetchedItem(item, data, ghUser, today);
+      if (result) {
+        pendingUpdates.set(item.id, result.update);
+        results.push(result.summary);
       }
+    } catch (err) {
+      errors.push({
+        id: item.id,
+        description: item.description,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
-    launchNext();
-  });
+  }
+
+  onProgress?.(total, total, "Checking GitHub status");
 
   // Apply all updates in a single write
   if (pendingUpdates.size > 0) {
@@ -480,32 +629,63 @@ export async function updateAll(
   // Update workstream detail files
   const workstreamItems = items.filter((i) => i.type === "Workstream" && !i.doneDate);
   if (workstreamItems.length > 0) {
-    onProgress?.(completed, total, "Updating workstreams");
+    onProgress?.(total, total, "Updating workstreams");
+
+    // Collect all active PR refs across all workstreams for a single batch query
+    const wsRefMap = new Map<string, { item: TodoItem; refs: DetailPrRef[]; activeRefs: DetailPrRef[] }>();
     for (const ws of workstreamItems) {
+      const detailPath = path.join(todoDir, `${ws.id}.md`);
+      if (!existsSync(detailPath)) continue;
+      const content = readFileSync(detailPath, "utf-8");
+      const refs = parseDetailPrRefs(content);
+      if (refs.length === 0) continue;
+      const activeRefs = refs.filter((r) => {
+        const s = r.currentStatus.toLowerCase();
+        return !s.startsWith("merged") && !s.startsWith("closed");
+      });
+      wsRefMap.set(ws.id, { item: ws, refs, activeRefs });
+    }
+
+    // Batch-fetch all active workstream PRs
+    const wsBatchQueries: BatchQuery[] = [];
+    for (const [, entry] of wsRefMap) {
+      for (const ref of entry.activeRefs) {
+        const [owner, repo] = ref.repo.split("/");
+        if (!owner || !repo) continue;
+        const key = batchKeyFor(ref.repo, ref.number);
+        if (!wsBatchQueries.some((q) => q.key === key)) {
+          wsBatchQueries.push({ key, owner, repo, number: ref.number, isPr: true, needsReviews: false });
+        }
+      }
+    }
+
+    const wsBatchResults = wsBatchQueries.length > 0 ? await ghBatchQuery(wsBatchQueries) : new Map();
+
+    // Process each workstream with pre-fetched data
+    for (const [wsId, entry] of wsRefMap) {
       try {
-        const wsResult = await updateWorkstreamDetail(todoDir, ws);
+        const wsResult = updateWorkstreamDetailWithData(todoDir, entry.item, entry.refs, entry.activeRefs, wsBatchResults);
         if (wsResult) {
-          // Update the workstream's status in TODO.md
           let content = readFileSync(filePath, "utf-8");
-          content = replaceCells(content, ws.id, new Map([[CELL_STATUS, wsResult.newStatus]]));
+          content = replaceCells(content, wsId, new Map([[CELL_STATUS, wsResult.newStatus]]));
           atomicWrite(filePath, content);
           results.push({
-            id: ws.id,
-            description: ws.description,
-            githubUrl: ws.githubUrl,
-            repo: ws.repo,
-            prNumber: ws.prNumber,
-            oldStatus: ws.status,
+            id: entry.item.id,
+            description: entry.item.description,
+            githubUrl: entry.item.githubUrl,
+            repo: entry.item.repo,
+            prNumber: entry.item.prNumber,
+            oldStatus: entry.item.status,
             newStatus: wsResult.newStatus,
-            oldPriority: ws.priority,
-            newPriority: ws.priority,
+            oldPriority: entry.item.priority,
+            newPriority: entry.item.priority,
             doneDateSet: false,
           });
         }
       } catch (err) {
         errors.push({
-          id: ws.id,
-          description: ws.description,
+          id: entry.item.id,
+          description: entry.item.description,
           error: err instanceof Error ? err.message : String(err),
         });
       }
@@ -514,7 +694,7 @@ export async function updateAll(
 
   // Discover new items
   onProgress?.(total, total, "Scanning for new items");
-  const discovered = ghUser ? await discoverNewItems(todoDir, items, ghUser) : [];
+  const discovered = ghUser ? await discoverNewItems(todoDir, items, ghUser, staleIds) : [];
   if (ghUserError) {
     errors.push({ id: "(auth)", description: "GitHub authentication", error: `Could not determine GitHub user: ${ghUserError}` });
   }
@@ -522,39 +702,39 @@ export async function updateAll(
   return { results, discovered, errors };
 }
 
-async function updateSingleItem(
+function processFetchedItem(
   item: TodoItem,
+  data: BatchResult,
   ghUser: string,
   today: string,
-): Promise<{ update: { status: string; priority: string; done: string; blocked: boolean }; summary: UpdateResult } | null> {
-  const repo = item.repo!;
-  const number = item.prNumber!;
+): { update: { status: string; priority: string; done: string; blocked: boolean }; summary: UpdateResult } | null {
   const oldStatus = item.blocked ? `[BLOCKED] ${item.status}` : item.status;
   const oldPriority = item.priority;
 
   if (item.type === "PR") {
-    const pr = await ghPrView(repo, number);
-    if (!pr) return null;
-    const ghStatus = parseGhPrJsonRaw(pr);
+    const ciStatus = computeCiStatusFromBatch(data.statusCheckRollup ?? []);
+    const ghStatus: GhPrStatus = {
+      state: data.state ?? "",
+      isDraft: data.isDraft ?? false,
+      statusCheckRollup: ciStatus,
+      reviewDecision: data.reviewDecision ?? "",
+      mergeable: data.mergeable ?? "",
+    };
     let statusStr = buildStatusString(ghStatus);
     let priority = item.priority;
     let done = "";
-    let blocked = false;
+    const blocked = false;
 
     if (ghStatus.state === "MERGED") {
-      statusStr = "Merged";
-      done = today;
-      priority = "P1";
+      statusStr = "Merged"; done = today; priority = "P1";
     } else if (ghStatus.state === "CLOSED") {
-      statusStr = "Closed";
-      done = today;
+      statusStr = "Closed"; done = today;
     } else if (!ghStatus.isDraft && ghStatus.reviewDecision === "APPROVED" && ghStatus.statusCheckRollup === "SUCCESS") {
-      priority = "P1"; // quick win
+      priority = "P1";
     }
 
     const newFullStatus = blocked ? `[BLOCKED] ${statusStr}` : statusStr;
     if (newFullStatus === oldStatus && priority === oldPriority && !done) return null;
-
     return {
       update: { status: statusStr, priority, done, blocked },
       summary: { id: item.id, description: item.description, githubUrl: item.githubUrl, repo: item.repo, prNumber: item.prNumber, oldStatus, newStatus: newFullStatus, oldPriority, newPriority: priority, doneDateSet: !!done },
@@ -562,12 +742,10 @@ async function updateSingleItem(
   }
 
   if (item.type === "Review") {
-    const pr = await ghPrView(repo, number);
-    if (!pr) return null;
-    const state = pr["state"] as string;
-    const isDraft = pr["isDraft"] as boolean;
-    const ci = computeCiStatus(pr);
-    const mergeState = pr["mergeStateStatus"] as string ?? "";
+    const state = data.state ?? "";
+    const isDraft = data.isDraft ?? false;
+    const ci = computeCiStatusFromBatch(data.statusCheckRollup ?? []);
+    const mergeState = data.mergeStateStatus ?? "";
 
     let status = "";
     let priority = item.priority;
@@ -578,45 +756,33 @@ async function updateSingleItem(
       status = state === "MERGED" ? "Merged" : "Closed";
       done = today;
     } else {
-      // Check user's review status
-      if (ghUser) {
-        const reviews = await ghUserReviews(repo, number);
-        const userReviews = reviews.filter((r) => r.user?.login === ghUser);
+      if (ghUser && data.reviews) {
+        const userReviews = data.reviews.filter((r) => r.user?.login === ghUser);
         const latestState = userReviews.length > 0 ? userReviews[userReviews.length - 1]!.state : "NONE";
-
         if (latestState === "APPROVED") {
-          status = "Approved";
-          done = today;
+          status = "Approved"; done = today;
         } else if (latestState === "CHANGES_REQUESTED" || latestState === "COMMENTED") {
-          status = "Reviewed, awaiting author";
-          priority = "P5";
-          blocked = true;
+          status = "Reviewed, awaiting author"; priority = "P5"; blocked = true;
         } else if (isDraft) {
-          status = "Draft, not ready for review";
-          priority = "P3";
+          status = "Draft, not ready for review"; priority = "P3";
         } else {
           status = "Pending";
-          if (ci === "FAILURE") {
-            status = "Pending, CI failing";
-            priority = "P3";
-          }
+          if (ci === "FAILURE") { status = "Pending, CI failing"; priority = "P3"; }
         }
       } else {
-        // No user info — just do basic status
-        const ghStatus = parseGhPrJsonRaw(pr);
+        const ghStatus: GhPrStatus = {
+          state, isDraft, statusCheckRollup: ci,
+          reviewDecision: data.reviewDecision ?? "", mergeable: data.mergeable ?? "",
+        };
         status = buildStatusString(ghStatus);
       }
-
       if (mergeState === "DIRTY" && !blocked) {
-        status = `${status}, merge conflicts`;
-        priority = "P5";
-        blocked = true;
+        status = `${status}, merge conflicts`; priority = "P5"; blocked = true;
       }
     }
 
     const newFullStatus = blocked ? `[BLOCKED] ${status}` : status;
     if (newFullStatus === oldStatus && priority === oldPriority && !done) return null;
-
     return {
       update: { status, priority, done, blocked },
       summary: { id: item.id, description: item.description, githubUrl: item.githubUrl, repo: item.repo, prNumber: item.prNumber, oldStatus, newStatus: newFullStatus, oldPriority, newPriority: priority, doneDateSet: !!done },
@@ -624,36 +790,39 @@ async function updateSingleItem(
   }
 
   if (item.type === "Issue") {
-    const issue = await ghIssueView(repo, number);
-    if (!issue) return null;
-    const state = issue["state"] as string;
+    const state = data.state ?? "";
     let status = item.status;
     let done = "";
 
     if (state === "CLOSED") {
-      status = "Closed";
-      done = today;
+      status = "Closed"; done = today;
     } else if (state === "OPEN") {
-      // Check if user is still assigned
-      const assignees = issue["assignees"] as Array<{ login: string }> | undefined;
+      const assignees = data.assignees;
       const isAssigned = ghUser && assignees?.some((a) => a.login === ghUser);
       if (assignees && assignees.length > 0 && !isAssigned) {
-        status = "Unassigned";
-        done = today;
+        status = "Unassigned"; done = today;
       } else {
         status = "Open";
       }
     }
 
     if (status === oldStatus && !done) return null;
-
     return {
       update: { status, priority: item.priority, done, blocked: false },
       summary: { id: item.id, description: item.description, githubUrl: item.githubUrl, repo: item.repo, prNumber: item.prNumber, oldStatus, newStatus: status, oldPriority: item.priority, newPriority: item.priority, doneDateSet: !!done },
     };
   }
 
-  return null; // Workstream, General, etc. — skip
+  return null;
+}
+
+function computeCiStatusFromBatch(checks: Array<Record<string, unknown>>): string {
+  if (checks.length === 0) return "";
+  const getResult = (c: Record<string, unknown>): string =>
+    (c["conclusion"] as string) ?? (c["state"] as string) ?? "";
+  if (checks.some((c) => { const r = getResult(c); return r === "FAILURE" || r === "ERROR"; })) return "FAILURE";
+  if (checks.every((c) => getResult(c) === "SUCCESS")) return "SUCCESS";
+  return "PENDING";
 }
 
 interface DetailPrRef {
@@ -716,34 +885,27 @@ function parseDetailPrRefs(content: string): DetailPrRef[] {
   return refs;
 }
 
-async function updateWorkstreamDetail(
+function updateWorkstreamDetailWithData(
   todoDir: string,
   item: TodoItem,
-): Promise<{ newStatus: string } | null> {
+  refs: DetailPrRef[],
+  activeRefs: DetailPrRef[],
+  batchData: Map<string, BatchResult>,
+): { newStatus: string } | null {
   const detailPath = path.join(todoDir, `${item.id}.md`);
-  if (!existsSync(detailPath)) return null;
-
   let content = readFileSync(detailPath, "utf-8");
-  const refs = parseDetailPrRefs(content);
-  if (refs.length === 0) return null;
-
-  let changed = false;
   const lines = content.split("\n");
-
-  // Check each PR and update status — skip terminal statuses to avoid unnecessary API calls
-  const activeRefs = refs.filter((r) => {
-    const s = r.currentStatus.toLowerCase();
-    return !s.startsWith("merged") && !s.startsWith("closed");
-  });
+  let changed = false;
 
   for (const ref of activeRefs) {
-    const pr = await ghPrView(ref.repo, ref.number);
-    if (!pr) continue;
+    const key = batchKeyFor(ref.repo, ref.number);
+    const data = batchData.get(key);
+    if (!data) continue;
 
-    const state = pr["state"] as string;
-    const isDraft = pr["isDraft"] as boolean;
-    const mergeable = (pr["mergeable"] as string) ?? "";
-    const ci = computeCiStatus(pr);
+    const state = data.state ?? "";
+    const isDraft = data.isDraft ?? false;
+    const mergeable = data.mergeable ?? "";
+    const ci = computeCiStatusFromBatch(data.statusCheckRollup ?? []);
 
     let newStatus: string;
     if (state === "MERGED") {
@@ -766,7 +928,6 @@ async function updateWorkstreamDetail(
 
     if (newStatus === ref.currentStatus) continue;
 
-    // Update the status cell in this line
     const line = lines[ref.lineIndex]!;
     const cells = line.split("|");
     if (ref.statusCellIndex < cells.length) {
@@ -778,7 +939,6 @@ async function updateWorkstreamDetail(
 
   if (!changed) return null;
 
-  // Write updated detail file
   content = lines.join("\n");
   atomicWrite(detailPath, content);
 
@@ -786,7 +946,7 @@ async function updateWorkstreamDetail(
   const updatedRefs = parseDetailPrRefs(content);
   let merged = 0;
   let closed = 0;
-  let total = updatedRefs.length;
+  const total = updatedRefs.length;
   const nonDone: string[] = [];
   for (const ref of updatedRefs) {
     const s = ref.currentStatus.toLowerCase();
@@ -838,7 +998,7 @@ async function ghSearchIssues(query: string): Promise<GhSearchItem[]> {
   } catch { return []; }
 }
 
-function collectTrackedKeys(todoDir: string, items: TodoItem[]): Set<string> {
+function collectTrackedKeys(todoDir: string, items: TodoItem[], excludeDetailIds?: Set<string>): Set<string> {
   const tracked = new Set<string>();
 
   function addKey(repo: string, num: string | number): void {
@@ -865,6 +1025,11 @@ function collectTrackedKeys(todoDir: string, items: TodoItem[]): Set<string> {
       (f) => f.startsWith("TODO-") && f.endsWith(".md"),
     );
     for (const file of files) {
+      // Skip detail files for excluded IDs (e.g. items done > 7 days)
+      if (excludeDetailIds) {
+        const id = file.replace(".md", "");
+        if (excludeDetailIds.has(id)) continue;
+      }
       const content = readFileSync(path.join(todoDir, file), "utf-8");
       for (const m of content.matchAll(shortHashPattern)) {
         addKey(m[1]!, m[2]!);
@@ -885,8 +1050,9 @@ async function discoverNewItems(
   todoDir: string,
   items: TodoItem[],
   ghUser: string,
+  staleIds?: Set<string>,
 ): Promise<DiscoveredItem[]> {
-  const tracked = collectTrackedKeys(todoDir, items);
+  const tracked = collectTrackedKeys(todoDir, items, staleIds);
   const discovered: DiscoveredItem[] = [];
 
   // Run both searches in parallel
