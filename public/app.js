@@ -85,6 +85,10 @@ function connectWebSocket() {
       handleUpdateProgress(msg.data);
     } else if (msg.type === 'claude-status') {
       handleClaudeStatus(msg.data);
+    } else if (msg.type === 'reload') {
+      // Debounce reload — wait 30s after last change to allow all pending writes to complete
+      clearTimeout(window._reloadTimer);
+      window._reloadTimer = setTimeout(() => location.reload(), 30000);
     }
   };
 }

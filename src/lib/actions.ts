@@ -153,7 +153,7 @@ function parseGhPrJson(json: string): GhPrStatus {
       return result === "FAILURE" || result === "ERROR";
     });
     const allSuccess = checks.every(
-      (c) => getResult(c) === "SUCCESS",
+      (c) => { const r = getResult(c); return r === "SUCCESS" || r === "SKIPPED" || r === "NEUTRAL"; },
     );
     if (hasFailure) {
       rollupStatus = "FAILURE";
@@ -469,6 +469,10 @@ function batchKeyFor(repo: string, number: number): string {
   return `r_${repo.replace(/[^a-zA-Z0-9]/g, "_")}_${number}`;
 }
 
+function isPassingStatus(r: string): boolean {
+  return r === "SUCCESS" || r === "SKIPPED" || r === "NEUTRAL";
+}
+
 function computeCiStatus(raw: Record<string, unknown>): string {
   const rollup = raw["statusCheckRollup"];
   if (!Array.isArray(rollup) || rollup.length === 0) return "";
@@ -476,7 +480,7 @@ function computeCiStatus(raw: Record<string, unknown>): string {
   const getResult = (c: Record<string, unknown>): string =>
     (c["conclusion"] as string) ?? (c["state"] as string) ?? "";
   if (checks.some((c) => { const r = getResult(c); return r === "FAILURE" || r === "ERROR"; })) return "FAILURE";
-  if (checks.every((c) => getResult(c) === "SUCCESS")) return "SUCCESS";
+  if (checks.every((c) => isPassingStatus(getResult(c)))) return "SUCCESS";
   return "PENDING";
 }
 
@@ -839,7 +843,7 @@ function computeCiStatusFromBatch(checks: Array<Record<string, unknown>>): strin
   const getResult = (c: Record<string, unknown>): string =>
     (c["conclusion"] as string) ?? (c["state"] as string) ?? "";
   if (checks.some((c) => { const r = getResult(c); return r === "FAILURE" || r === "ERROR"; })) return "FAILURE";
-  if (checks.every((c) => getResult(c) === "SUCCESS")) return "SUCCESS";
+  if (checks.every((c) => isPassingStatus(getResult(c)))) return "SUCCESS";
   return "PENDING";
 }
 

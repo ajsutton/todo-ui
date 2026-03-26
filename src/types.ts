@@ -51,4 +51,5 @@ export type WsMessage =
   | { type: "state"; data: TodoState }
   | { type: "detail"; data: DetailFile }
   | { type: "claude-status"; data: { requestId: string; status: "running" | "done" | "error"; output: string; activity?: string } }
-  | { type: "update-progress"; data: { current: number; total: number; phase: string; itemId?: string } };
+  | { type: "update-progress"; data: { current: number; total: number; phase: string; itemId?: string } }
+  | { type: "reload" };

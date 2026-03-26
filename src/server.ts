@@ -310,4 +310,11 @@ const server = Bun.serve({
   },
 });
 
+// Watch public directory for changes and trigger browser reload
+watch(PUBLIC_DIR, { recursive: true }, (event, filename) => {
+  if (filename && (filename.endsWith(".js") || filename.endsWith(".css") || filename.endsWith(".html"))) {
+    broadcast({ type: "reload" } as WsMessage);
+  }
+});
+
 console.log(`TODO UI server listening on http://${HOST}:${PORT}`);

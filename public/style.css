@@ -242,6 +242,11 @@ td {
   vertical-align: middle;
 }
 
+td:first-child,
+th:first-child {
+  white-space: nowrap;
+}
+
 tr {
   cursor: pointer;
   transition: background 0.1s ease;
