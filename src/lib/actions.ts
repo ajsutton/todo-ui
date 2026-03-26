@@ -337,6 +337,7 @@ interface BatchResult {
   assignees?: Array<{ login: string }>;
   // Review fields (for Review items)
   reviews?: GhReview[];
+  reviewRequestedUsers?: string[];
 }
 
 const BATCH_SIZE = 30; // GitHub GraphQL has a cost limit; ~30 nodes is safe
@@ -376,7 +377,8 @@ async function ghBatchQuery(
                   }
                 }
               }
-              ${q.needsReviews ? `reviews(last: 50) { nodes { author { login } state submittedAt } }` : ""}
+              ${q.needsReviews ? `reviews(last: 50) { nodes { author { login } state submittedAt } }
+              reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { name } } } }` : ""}
             }
           }`);
       } else {
@@ -429,7 +431,7 @@ async function ghBatchQuery(
           result.statusCheckRollup = (contexts?.["nodes"] as Array<Record<string, unknown>>) ?? [];
         }
 
-        // Extract reviews
+        // Extract reviews and review requests
         if (q.needsReviews) {
           const reviewsData = pr["reviews"] as Record<string, unknown> | undefined;
           const reviewNodes = (reviewsData?.["nodes"] as Array<Record<string, unknown>>) ?? [];
@@ -438,6 +440,15 @@ async function ghBatchQuery(
             state: (r["state"] as string) ?? "",
             submitted_at: (r["submittedAt"] as string) ?? "",
           }));
+
+          const reqData = pr["reviewRequests"] as Record<string, unknown> | undefined;
+          const reqNodes = (reqData?.["nodes"] as Array<Record<string, unknown>>) ?? [];
+          result.reviewRequestedUsers = reqNodes
+            .map((n) => {
+              const reviewer = n["requestedReviewer"] as Record<string, unknown> | undefined;
+              return (reviewer?.["login"] as string) ?? "";
+            })
+            .filter(Boolean);
         }
       } else {
         const issue = node as Record<string, unknown>;
@@ -755,10 +766,17 @@ function processFetchedItem(
     if (state === "MERGED" || state === "CLOSED") {
       status = state === "MERGED" ? "Merged" : "Closed";
       done = today;
-    } else {
-      if (ghUser && data.reviews) {
-        const userReviews = data.reviews.filter((r) => r.user?.login === ghUser);
-        const latestState = userReviews.length > 0 ? userReviews[userReviews.length - 1]!.state : "NONE";
+    } else if (ghUser && data.reviews !== undefined) {
+      // Check if user is still a requested reviewer or has reviewed
+      const userReviews = data.reviews.filter((r) => r.user?.login === ghUser);
+      const isRequested = data.reviewRequestedUsers?.includes(ghUser) ?? false;
+      const hasReviewed = userReviews.length > 0;
+
+      if (!isRequested && !hasReviewed) {
+        // User was removed as reviewer without ever reviewing
+        status = "Review request removed"; done = today;
+      } else {
+        const latestState = hasReviewed ? userReviews[userReviews.length - 1]!.state : "NONE";
         if (latestState === "APPROVED") {
           status = "Approved"; done = today;
         } else if (latestState === "CHANGES_REQUESTED" || latestState === "COMMENTED") {
@@ -769,16 +787,16 @@ function processFetchedItem(
           status = "Pending";
           if (ci === "FAILURE") { status = "Pending, CI failing"; priority = "P3"; }
         }
-      } else {
-        const ghStatus: GhPrStatus = {
-          state, isDraft, statusCheckRollup: ci,
-          reviewDecision: data.reviewDecision ?? "", mergeable: data.mergeable ?? "",
-        };
-        status = buildStatusString(ghStatus);
       }
-      if (mergeState === "DIRTY" && !blocked) {
-        status = `${status}, merge conflicts`; priority = "P5"; blocked = true;
-      }
+    } else {
+      const ghStatus: GhPrStatus = {
+        state, isDraft, statusCheckRollup: ci,
+        reviewDecision: data.reviewDecision ?? "", mergeable: data.mergeable ?? "",
+      };
+      status = buildStatusString(ghStatus);
+    }
+    if (mergeState === "DIRTY" && !blocked && !done) {
+      status = `${status}, merge conflicts`; priority = "P5"; blocked = true;
     }
 
     const newFullStatus = blocked ? `[BLOCKED] ${status}` : status;
