@@ -730,8 +730,13 @@ async function updateWorkstreamDetail(
   let changed = false;
   const lines = content.split("\n");
 
-  // Check each PR and update status
-  for (const ref of refs) {
+  // Check each PR and update status — skip terminal statuses to avoid unnecessary API calls
+  const activeRefs = refs.filter((r) => {
+    const s = r.currentStatus.toLowerCase();
+    return !s.startsWith("merged") && !s.startsWith("closed");
+  });
+
+  for (const ref of activeRefs) {
     const pr = await ghPrView(ref.repo, ref.number);
     if (!pr) continue;
 
