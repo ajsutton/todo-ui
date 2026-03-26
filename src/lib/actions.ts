@@ -298,7 +298,7 @@ async function ghPrView(repo: string, number: number): Promise<Record<string, un
 async function ghIssueView(repo: string, number: number): Promise<Record<string, unknown> | null> {
   const proc = Bun.spawn([
     "gh", "issue", "view", String(number), "--repo", repo,
-    "--json", "state,title",
+    "--json", "state,title,assignees",
   ]);
   const output = await new Response(proc.stdout).text();
   const exitCode = await proc.exited;
@@ -634,7 +634,15 @@ async function updateSingleItem(
       status = "Closed";
       done = today;
     } else if (state === "OPEN") {
-      status = "Open";
+      // Check if user is still assigned
+      const assignees = issue["assignees"] as Array<{ login: string }> | undefined;
+      const isAssigned = ghUser && assignees?.some((a) => a.login === ghUser);
+      if (assignees && assignees.length > 0 && !isAssigned) {
+        status = "Unassigned";
+        done = today;
+      } else {
+        status = "Open";
+      }
     }
 
     if (status === oldStatus && !done) return null;
