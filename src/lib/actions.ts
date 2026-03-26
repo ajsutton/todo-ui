@@ -477,6 +477,41 @@ export async function updateAll(
     atomicWrite(filePath, content);
   }
 
+  // Update workstream detail files
+  const workstreamItems = items.filter((i) => i.type === "Workstream" && !i.doneDate);
+  if (workstreamItems.length > 0) {
+    onProgress?.(completed, total, "Updating workstreams");
+    for (const ws of workstreamItems) {
+      try {
+        const wsResult = await updateWorkstreamDetail(todoDir, ws);
+        if (wsResult) {
+          // Update the workstream's status in TODO.md
+          let content = readFileSync(filePath, "utf-8");
+          content = replaceCells(content, ws.id, new Map([[CELL_STATUS, wsResult.newStatus]]));
+          atomicWrite(filePath, content);
+          results.push({
+            id: ws.id,
+            description: ws.description,
+            githubUrl: ws.githubUrl,
+            repo: ws.repo,
+            prNumber: ws.prNumber,
+            oldStatus: ws.status,
+            newStatus: wsResult.newStatus,
+            oldPriority: ws.priority,
+            newPriority: ws.priority,
+            doneDateSet: false,
+          });
+        }
+      } catch (err) {
+        errors.push({
+          id: ws.id,
+          description: ws.description,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
   // Discover new items
   onProgress?.(total, total, "Scanning for new items");
   const discovered = ghUser ? await discoverNewItems(todoDir, items, ghUser) : [];
@@ -611,6 +646,151 @@ async function updateSingleItem(
   }
 
   return null; // Workstream, General, etc. — skip
+}
+
+interface DetailPrRef {
+  repo: string;
+  number: number;
+  lineIndex: number;
+  statusCellIndex: number;
+  currentStatus: string;
+}
+
+function parseDetailPrRefs(content: string): DetailPrRef[] {
+  const lines = content.split("\n");
+  const refs: DetailPrRef[] = [];
+
+  // Find table rows with PR references and a Status column
+  // Supports multiple tables — each header row resets column indices
+  let statusColIdx = -1;
+  let prColIdx = -1;
+  let inTable = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!.trim();
+    if (!line.startsWith("|")) {
+      if (inTable) {
+        inTable = false;
+        statusColIdx = -1;
+        prColIdx = -1;
+      }
+      continue;
+    }
+
+    const cells = line.split("|").map((c) => c.trim());
+
+    // Detect header row to find Status and PR column indices
+    if (cells.some((c) => /^status$/i.test(c))) {
+      statusColIdx = cells.findIndex((c) => /^status$/i.test(c));
+      prColIdx = cells.findIndex((c) => /^pr$/i.test(c));
+      inTable = true;
+      continue;
+    }
+
+    // Skip separator rows
+    if (cells.some((c) => /^-+$/.test(c))) continue;
+
+    if (statusColIdx === -1) continue;
+
+    // Extract PR reference from the PR column if identified, otherwise from the whole line
+    const searchText = prColIdx !== -1 ? (cells[prColIdx] ?? "") : line;
+    const urlMatch = searchText.match(/github\.com\/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)\/pull\/(\d+)/);
+    const shortMatch = searchText.match(/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)#(\d+)/);
+    const match = urlMatch ?? shortMatch;
+    if (!match) continue;
+
+    const repo = match[1]!;
+    const number = parseInt(match[2]!, 10);
+    const currentStatus = cells[statusColIdx] ?? "";
+
+    refs.push({ repo, number, lineIndex: i, statusCellIndex: statusColIdx, currentStatus });
+  }
+
+  return refs;
+}
+
+async function updateWorkstreamDetail(
+  todoDir: string,
+  item: TodoItem,
+): Promise<{ newStatus: string } | null> {
+  const detailPath = path.join(todoDir, `${item.id}.md`);
+  if (!existsSync(detailPath)) return null;
+
+  let content = readFileSync(detailPath, "utf-8");
+  const refs = parseDetailPrRefs(content);
+  if (refs.length === 0) return null;
+
+  let changed = false;
+  const lines = content.split("\n");
+
+  // Check each PR and update status
+  for (const ref of refs) {
+    const pr = await ghPrView(ref.repo, ref.number);
+    if (!pr) continue;
+
+    const state = pr["state"] as string;
+    const isDraft = pr["isDraft"] as boolean;
+    const mergeable = (pr["mergeable"] as string) ?? "";
+    const ci = computeCiStatus(pr);
+
+    let newStatus: string;
+    if (state === "MERGED") {
+      newStatus = "Merged";
+    } else if (state === "CLOSED") {
+      newStatus = "Closed";
+    } else if (isDraft) {
+      const parts = ["Draft"];
+      if (mergeable === "CONFLICTING") parts.push("merge conflicts");
+      else if (ci === "FAILURE") parts.push("CI failing");
+      else if (mergeable === "MERGEABLE") parts.push("mergeable");
+      newStatus = parts.join(", ");
+    } else {
+      const parts = ["Open"];
+      if (mergeable === "CONFLICTING") parts.push("merge conflicts");
+      else if (ci === "FAILURE") parts.push("CI failing");
+      else if (ci === "SUCCESS") parts.push("CI passing");
+      newStatus = parts.join(", ");
+    }
+
+    if (newStatus === ref.currentStatus) continue;
+
+    // Update the status cell in this line
+    const line = lines[ref.lineIndex]!;
+    const cells = line.split("|");
+    if (ref.statusCellIndex < cells.length) {
+      cells[ref.statusCellIndex] = ` ${newStatus} `;
+      lines[ref.lineIndex] = cells.join("|");
+      changed = true;
+    }
+  }
+
+  if (!changed) return null;
+
+  // Write updated detail file
+  content = lines.join("\n");
+  atomicWrite(detailPath, content);
+
+  // Recompute summary status from the updated detail
+  const updatedRefs = parseDetailPrRefs(content);
+  let merged = 0;
+  let closed = 0;
+  let total = updatedRefs.length;
+  const nonDone: string[] = [];
+  for (const ref of updatedRefs) {
+    const s = ref.currentStatus.toLowerCase();
+    if (s.includes("merged")) merged++;
+    else if (s.includes("closed")) closed++;
+    else nonDone.push(`#${ref.number} ${ref.currentStatus.toLowerCase()}`);
+  }
+
+  const parts: string[] = [];
+  if (merged > 0) parts.push(`${merged}/${total} PRs merged`);
+  if (closed > 0) parts.push(`${closed} closed`);
+  if (nonDone.length > 0) parts.push(`${nonDone.length} remaining (${nonDone.join(", ")})`);
+
+  const newStatus = parts.join(", ") || item.status;
+  if (newStatus === item.status) return null;
+
+  return { newStatus };
 }
 
 function parseGhPrJsonRaw(raw: Record<string, unknown>): GhPrStatus {
