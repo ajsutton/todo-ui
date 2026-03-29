@@ -125,16 +125,6 @@ h1 {
   gap: 12px;
 }
 
-.log-link {
-  color: var(--fg);
-  text-decoration: none;
-  font-size: 0.85rem;
-}
-
-.log-link:hover {
-  text-decoration: underline;
-}
-
 /* Update progress */
 .update-action {
   display: flex;
