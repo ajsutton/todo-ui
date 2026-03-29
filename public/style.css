@@ -125,6 +125,11 @@ h1 {
   gap: 12px;
 }
 
+.last-update {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 /* Update progress */
 .update-action {
   display: flex;

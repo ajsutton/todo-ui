@@ -87,6 +87,7 @@ function connectWebSocket() {
       handleClaudeStatus(msg.data);
     } else if (msg.type === 'pending-discovered') {
       handlePendingDiscovered(msg.data);
+      if (msg.data.timestamp) setLastUpdate(msg.data.timestamp);
     } else if (msg.type === 'reload') {
       // Debounce reload — wait 30s after last change to allow all pending writes to complete
       clearTimeout(window._reloadTimer);
@@ -328,6 +329,7 @@ async function refreshAll() {
     const res = await fetch('/api/refresh', { method: 'POST', signal: AbortSignal.timeout(120000) });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
+    setLastUpdate(new Date().toISOString());
     showUpdateDialog(data.results || [], data.discovered || [], data.errors || []);
   } catch (err) {
     console.error('Failed to update all:', err);
@@ -747,6 +749,34 @@ function handleClaudeStatus(data) {
   }
 }
 
+// Last update time
+function setLastUpdate(isoString) {
+  const el = document.getElementById('last-update');
+  if (!el) return;
+  if (!isoString) { el.textContent = ''; return; }
+  const d = new Date(isoString);
+  const now = new Date();
+  const diffMs = now - d;
+  const diffMin = Math.floor(diffMs / 60000);
+  let text;
+  if (diffMin < 1) text = 'just now';
+  else if (diffMin < 60) text = diffMin + 'm ago';
+  else if (diffMin < 1440) text = Math.floor(diffMin / 60) + 'h ago';
+  else text = d.toLocaleDateString();
+  el.textContent = 'Updated ' + text;
+  el.title = d.toLocaleString();
+}
+
+// Fetch last update time from log on startup
+async function fetchLastUpdateTime() {
+  try {
+    const res = await fetch('/api/log?limit=1&offset=0');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.entries.length > 0) setLastUpdate(data.entries[0].timestamp);
+  } catch {}
+}
+
 // Pending discovered items (from auto-updates)
 let pendingItems = [];
 let pendingTimestamp = '';
@@ -936,6 +966,7 @@ function closeLogDialog() {
 // Event listeners
 document.addEventListener('DOMContentLoaded', () => {
   connectWebSocket();
+  fetchLastUpdateTime();
 
   // Sort headers
   document.querySelectorAll('th[data-sort]').forEach(th => {
