@@ -762,6 +762,7 @@ td.editable:hover {
   color: var(--fg-secondary);
   font-size: 13px;
   font-style: italic;
+  padding: 8px 12px;
 }
 
 .discovery-section h3 {
