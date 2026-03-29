@@ -982,7 +982,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('pending-badge').onclick = showPendingDialog;
 
   // Update log
-  document.getElementById('show-log').onclick = showLogDialog;
+  document.getElementById('show-log').onclick = (e) => { e.preventDefault(); showLogDialog(); };
   document.getElementById('log-dialog-close').onclick = closeLogDialog;
   document.getElementById('log-close-btn').onclick = closeLogDialog;
   document.getElementById('log-load-more').onclick = () => loadLogPage(false);
