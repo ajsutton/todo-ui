@@ -85,6 +85,8 @@ function connectWebSocket() {
       handleUpdateProgress(msg.data);
     } else if (msg.type === 'claude-status') {
       handleClaudeStatus(msg.data);
+    } else if (msg.type === 'pending-discovered') {
+      handlePendingDiscovered(msg.data);
     } else if (msg.type === 'reload') {
       // Debounce reload — wait 30s after last change to allow all pending writes to complete
       clearTimeout(window._reloadTimer);
@@ -474,6 +476,7 @@ function showUpdateDialog(results, discovered, errors) {
     dialog._discovered = [];
   }
 
+  dialog._isPending = false;
   dialog.classList.remove('hidden');
 }
 
@@ -744,6 +747,190 @@ function handleClaudeStatus(data) {
   }
 }
 
+// Pending discovered items (from auto-updates)
+let pendingItems = [];
+let pendingTimestamp = '';
+
+function handlePendingDiscovered(data) {
+  pendingItems = data.items || [];
+  pendingTimestamp = data.timestamp || '';
+  const badge = document.getElementById('pending-badge');
+  const count = document.getElementById('pending-count');
+  if (pendingItems.length > 0) {
+    count.textContent = pendingItems.length;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function showPendingDialog() {
+  if (pendingItems.length === 0) return;
+  showUpdateDialog([], pendingItems, []);
+  const dialog = document.getElementById('update-dialog');
+  dialog._isPending = true;
+}
+
+async function addPendingItems() {
+  const dialog = document.getElementById('update-dialog');
+  const content = document.getElementById('update-dialog-content');
+  const discovered = dialog._discovered || [];
+
+  const checked = new Set();
+  content.querySelectorAll('.discovery-item input[type="checkbox"]:checked').forEach(cb => {
+    checked.add(cb.dataset.repo + '#' + cb.dataset.prNumber);
+  });
+
+  const selected = discovered.filter(d => checked.has(d.repo + '#' + d.prNumber));
+  closeUpdateDialog();
+
+  if (selected.length === 0) {
+    // Dismiss all
+    await fetch('/api/pending/dismiss', { method: 'POST' });
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/pending/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: selected }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+  } catch (err) {
+    console.error('Failed to add pending items:', err);
+  }
+}
+
+// Update log
+let logOffset = 0;
+let logTotal = 0;
+const LOG_PAGE_SIZE = 50;
+
+async function showLogDialog() {
+  logOffset = 0;
+  const dialog = document.getElementById('log-dialog');
+  const content = document.getElementById('log-dialog-content');
+  content.innerHTML = '<p>Loading...</p>';
+  dialog.classList.remove('hidden');
+  await loadLogPage(true);
+}
+
+async function loadLogPage(reset) {
+  const content = document.getElementById('log-dialog-content');
+  const loadMore = document.getElementById('log-load-more');
+  try {
+    const res = await fetch('/api/log?limit=' + LOG_PAGE_SIZE + '&offset=' + logOffset);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    logTotal = data.total;
+
+    if (reset) content.innerHTML = '';
+
+    if (data.entries.length === 0 && logOffset === 0) {
+      content.innerHTML = '<p class="no-changes">No update log entries.</p>';
+      loadMore.classList.add('hidden');
+      return;
+    }
+
+    for (const entry of data.entries) {
+      content.appendChild(renderLogEntry(entry));
+    }
+
+    logOffset += data.entries.length;
+    if (logOffset < logTotal) {
+      loadMore.classList.remove('hidden');
+    } else {
+      loadMore.classList.add('hidden');
+    }
+  } catch (err) {
+    content.innerHTML = '<p>Error loading log: ' + err.message + '</p>';
+  }
+}
+
+function renderLogEntry(entry) {
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+
+  const header = document.createElement('div');
+  header.className = 'log-entry-header';
+
+  const time = document.createElement('span');
+  time.className = 'log-entry-time';
+  const d = new Date(entry.timestamp);
+  time.textContent = d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+  header.appendChild(time);
+
+  const source = document.createElement('span');
+  source.className = 'log-entry-source log-source-' + entry.source;
+  source.textContent = entry.source;
+  header.appendChild(source);
+
+  const summary = document.createElement('span');
+  summary.className = 'log-entry-summary';
+  const parts = [];
+  if (entry.results.length > 0) parts.push(entry.results.length + ' changed');
+  if (entry.discoveredCount > 0) parts.push(entry.discoveredCount + ' discovered');
+  if (entry.errors.length > 0) parts.push(entry.errors.length + ' errors');
+  if (parts.length === 0) parts.push('no changes');
+  summary.textContent = parts.join(', ');
+  header.appendChild(summary);
+
+  div.appendChild(header);
+
+  // Collapsible details
+  if (entry.results.length > 0 || entry.errors.length > 0) {
+    const toggle = document.createElement('button');
+    toggle.className = 'btn-small log-toggle';
+    toggle.textContent = 'Details';
+
+    const details = document.createElement('div');
+    details.className = 'log-details hidden';
+
+    if (entry.results.length > 0) {
+      const ul = document.createElement('ul');
+      ul.className = 'log-changes';
+      for (const r of entry.results) {
+        const li = document.createElement('li');
+        li.textContent = r.id + ': ' + r.oldStatus + ' \u2192 ' + r.newStatus;
+        if (r.oldPriority !== r.newPriority) li.textContent += ' (' + r.oldPriority + ' \u2192 ' + r.newPriority + ')';
+        if (r.doneDateSet) li.textContent += ' [Done]';
+        ul.appendChild(li);
+      }
+      details.appendChild(ul);
+    }
+
+    if (entry.errors.length > 0) {
+      const errTitle = document.createElement('div');
+      errTitle.className = 'log-errors-title';
+      errTitle.textContent = 'Errors:';
+      details.appendChild(errTitle);
+      const ul = document.createElement('ul');
+      ul.className = 'log-errors';
+      for (const e of entry.errors) {
+        const li = document.createElement('li');
+        li.textContent = e.id + ': ' + e.error;
+        ul.appendChild(li);
+      }
+      details.appendChild(ul);
+    }
+
+    toggle.onclick = () => {
+      details.classList.toggle('hidden');
+      toggle.textContent = details.classList.contains('hidden') ? 'Details' : 'Hide';
+    };
+
+    header.appendChild(toggle);
+    div.appendChild(details);
+  }
+
+  return div;
+}
+
+function closeLogDialog() {
+  document.getElementById('log-dialog').classList.add('hidden');
+}
+
 // Event listeners
 document.addEventListener('DOMContentLoaded', () => {
   connectWebSocket();
@@ -791,13 +978,37 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('filter-type').onchange = (e) => { filterType = e.target.value; renderTable(); };
   document.getElementById('filter-status').onchange = (e) => { filterStatus = e.target.value; renderTable(); };
 
+  // Pending items badge
+  document.getElementById('pending-badge').onclick = showPendingDialog;
+
+  // Update log
+  document.getElementById('show-log').onclick = showLogDialog;
+  document.getElementById('log-dialog-close').onclick = closeLogDialog;
+  document.getElementById('log-close-btn').onclick = closeLogDialog;
+  document.getElementById('log-load-more').onclick = () => loadLogPage(false);
+
   // Refresh/update all
   document.getElementById('refresh-all').onclick = refreshAll;
 
   // Update dialog
-  document.getElementById('discovery-skip').onclick = closeUpdateDialog;
-  document.getElementById('update-dialog-close').onclick = closeUpdateDialog;
-  document.getElementById('discovery-add').onclick = addDiscoveredItems;
+  document.getElementById('discovery-skip').onclick = () => {
+    const dialog = document.getElementById('update-dialog');
+    if (dialog._isPending) {
+      fetch('/api/pending/dismiss', { method: 'POST' });
+    }
+    closeUpdateDialog();
+  };
+  document.getElementById('update-dialog-close').onclick = () => {
+    closeUpdateDialog();
+  };
+  document.getElementById('discovery-add').onclick = () => {
+    const dialog = document.getElementById('update-dialog');
+    if (dialog._isPending) {
+      addPendingItems();
+    } else {
+      addDiscoveredItems();
+    }
+  };
 
   // Claude prompt
   const claudeInput = document.getElementById('claude-prompt');
@@ -846,6 +1057,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Escape to close panels/dialogs
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      const logDialog = document.getElementById('log-dialog');
+      if (!logDialog.classList.contains('hidden')) {
+        closeLogDialog();
+        return;
+      }
       const dialog = document.getElementById('update-dialog');
       if (!dialog.classList.contains('hidden')) {
         closeUpdateDialog();

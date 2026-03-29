@@ -12,7 +12,8 @@ import {
   addDiscoveredItems,
   runClaudePrompt,
 } from "./lib/actions.ts";
-import type { DiscoveredItem } from "./types.ts";
+import { appendLogEntry, getLogEntries } from "./lib/update-log.ts";
+import type { DiscoveredItem, UpdateLogEntry } from "./types.ts";
 import type { WsMessage } from "./types.ts";
 
 const TODO_CONFIG_PATH = path.join(
@@ -61,6 +62,58 @@ if (existsSync(configDir)) {
     }
   });
 }
+
+// Pending discovered items from auto-updates (awaiting user review)
+let pendingDiscovered: DiscoveredItem[] = [];
+let pendingTimestamp = "";
+
+const AUTO_UPDATE_INTERVAL_MS = 15 * 60 * 1000;
+let autoUpdateRunning = false;
+
+async function runAutoUpdate(): Promise<void> {
+  if (autoUpdateRunning) return;
+  autoUpdateRunning = true;
+  try {
+    const state = watcher.getState();
+    const { results, discovered, errors } = await updateAll(watcher.getDir(), state.items);
+    watcher.reload();
+
+    const entry: UpdateLogEntry = {
+      timestamp: new Date().toISOString(),
+      results: results.map((r) => ({
+        id: r.id,
+        oldStatus: r.oldStatus,
+        newStatus: r.newStatus,
+        oldPriority: r.oldPriority,
+        newPriority: r.newPriority,
+        doneDateSet: r.doneDateSet,
+      })),
+      discoveredCount: discovered.length,
+      errors: errors.map((e) => ({ id: e.id, error: e.error })),
+      source: "auto",
+    };
+    appendLogEntry(watcher.getDir(), entry);
+
+    if (discovered.length > 0) {
+      pendingDiscovered = discovered;
+      pendingTimestamp = entry.timestamp;
+      broadcast({
+        type: "pending-discovered",
+        data: { items: discovered, timestamp: pendingTimestamp },
+      });
+    }
+
+    console.log(
+      `[auto-update] ${results.length} changes, ${discovered.length} discovered, ${errors.length} errors`,
+    );
+  } catch (err) {
+    console.error("[auto-update] failed:", err);
+  } finally {
+    autoUpdateRunning = false;
+  }
+}
+
+setInterval(runAutoUpdate, AUTO_UPDATE_INTERVAL_MS);
 
 type WS = Bun.ServerWebSocket<unknown>;
 const clients = new Set<WS>();
@@ -195,6 +248,30 @@ const server = Bun.serve({
           broadcast({ type: "update-progress", data });
         });
         watcher.reload();
+
+        const entry: UpdateLogEntry = {
+          timestamp: new Date().toISOString(),
+          results: results.map((r) => ({
+            id: r.id,
+            oldStatus: r.oldStatus,
+            newStatus: r.newStatus,
+            oldPriority: r.oldPriority,
+            newPriority: r.newPriority,
+            doneDateSet: r.doneDateSet,
+          })),
+          discoveredCount: discovered.length,
+          errors: errors.map((e) => ({ id: e.id, error: e.error })),
+          source: "manual",
+        };
+        appendLogEntry(watcher.getDir(), entry);
+
+        // Clear pending if manual refresh also finds items (user will see them in the dialog)
+        if (discovered.length > 0) {
+          pendingDiscovered = [];
+          pendingTimestamp = "";
+          broadcast({ type: "pending-discovered", data: { items: [], timestamp: "" } });
+        }
+
         return jsonResponse({ ok: true, results, discovered, errors });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -277,6 +354,46 @@ const server = Bun.serve({
       return jsonResponse({ ok: true, requestId }, 202);
     }
 
+    // Pending discovered items from auto-updates
+    if (req.method === "GET" && pathname === "/api/pending") {
+      return jsonResponse({ items: pendingDiscovered, timestamp: pendingTimestamp });
+    }
+
+    if (req.method === "POST" && pathname === "/api/pending/dismiss") {
+      pendingDiscovered = [];
+      pendingTimestamp = "";
+      broadcast({ type: "pending-discovered", data: { items: [], timestamp: "" } });
+      return jsonResponse({ ok: true });
+    }
+
+    if (req.method === "POST" && pathname === "/api/pending/add") {
+      try {
+        const body = (await req.json()) as { items?: DiscoveredItem[] };
+        if (!body.items || !Array.isArray(body.items) || body.items.length === 0) {
+          return jsonResponse({ error: "Missing items array" }, 400);
+        }
+        addDiscoveredItems(watcher.getDir(), body.items);
+        // Remove added items from pending
+        const addedKeys = new Set(body.items.map((i) => `${i.repo}#${i.prNumber}`));
+        pendingDiscovered = pendingDiscovered.filter((d) => !addedKeys.has(`${d.repo}#${d.prNumber}`));
+        if (pendingDiscovered.length === 0) pendingTimestamp = "";
+        broadcast({ type: "pending-discovered", data: { items: pendingDiscovered, timestamp: pendingTimestamp } });
+        watcher.reload();
+        return jsonResponse({ ok: true, count: body.items.length });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return jsonResponse({ error: message }, 500);
+      }
+    }
+
+    // Update log
+    if (req.method === "GET" && pathname === "/api/log") {
+      const limit = parseInt(url.searchParams.get("limit") ?? "50", 10);
+      const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
+      const { entries, total } = getLogEntries(watcher.getDir(), limit, offset);
+      return jsonResponse({ entries, total });
+    }
+
     return new Response("Not Found", { status: 404 });
   },
 
@@ -285,6 +402,12 @@ const server = Bun.serve({
       clients.add(ws as WS);
       const state = watcher.getState();
       ws.send(JSON.stringify({ type: "state", data: state } satisfies WsMessage));
+      if (pendingDiscovered.length > 0) {
+        ws.send(JSON.stringify({
+          type: "pending-discovered",
+          data: { items: pendingDiscovered, timestamp: pendingTimestamp },
+        } satisfies WsMessage));
+      }
     },
     close(ws) {
       clients.delete(ws as WS);

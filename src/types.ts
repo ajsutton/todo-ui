@@ -47,9 +47,18 @@ export interface DiscoveredItem {
   author: string;
 }
 
+export interface UpdateLogEntry {
+  timestamp: string;
+  results: { id: string; oldStatus: string; newStatus: string; oldPriority: string; newPriority: string; doneDateSet: boolean }[];
+  discoveredCount: number;
+  errors: { id: string; error: string }[];
+  source: "auto" | "manual";
+}
+
 export type WsMessage =
   | { type: "state"; data: TodoState }
   | { type: "detail"; data: DetailFile }
   | { type: "claude-status"; data: { requestId: string; status: "running" | "done" | "error"; output: string; activity?: string } }
   | { type: "update-progress"; data: { current: number; total: number; phase: string; itemId?: string } }
+  | { type: "pending-discovered"; data: { items: DiscoveredItem[]; timestamp: string } }
   | { type: "reload" };

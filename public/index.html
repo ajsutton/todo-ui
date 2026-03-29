@@ -14,6 +14,10 @@
       <span id="connection-status" class="status-indicator"></span>
     </div>
     <div class="actions">
+      <button id="pending-badge" class="btn pending-badge hidden" title="New items found by auto-update">
+        <span id="pending-count">0</span> pending
+      </button>
+      <button id="show-log" class="btn-small" title="Update log">Log</button>
       <div class="update-action">
         <button id="refresh-all" class="btn">Update All</button>
         <div id="update-progress" class="update-progress hidden">
@@ -93,6 +97,22 @@
     </div>
     <div id="claude-spinner" class="claude-spinner hidden"><span class="spinner"></span> Thinking...</div>
     <pre id="claude-output" class="hidden"></pre>
+  </div>
+
+  <div id="log-dialog" class="dialog-overlay hidden">
+    <div class="dialog dialog-wide">
+      <div class="dialog-header">
+        <h2>Update Log</h2>
+        <button id="log-dialog-close" class="btn-icon">&times;</button>
+      </div>
+      <div id="log-dialog-content" class="log-content"></div>
+      <div class="dialog-actions">
+        <div class="dialog-buttons">
+          <button id="log-load-more" class="btn-small hidden">Load more</button>
+          <button id="log-close-btn" class="btn-small">Close</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="/app.js"></script>
