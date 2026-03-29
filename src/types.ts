@@ -49,9 +49,9 @@ export interface DiscoveredItem {
 
 export interface UpdateLogEntry {
   timestamp: string;
-  results: { id: string; oldStatus: string; newStatus: string; oldPriority: string; newPriority: string; doneDateSet: boolean }[];
+  results: { id: string; description: string; oldStatus: string; newStatus: string; oldPriority: string; newPriority: string; doneDateSet: boolean }[];
   discoveredCount: number;
-  errors: { id: string; error: string }[];
+  errors: { id: string; description: string; error: string }[];
   source: "auto" | "manual";
 }
 

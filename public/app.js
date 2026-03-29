@@ -892,7 +892,8 @@ function renderLogEntry(entry) {
       ul.className = 'log-changes';
       for (const r of entry.results) {
         const li = document.createElement('li');
-        li.textContent = r.id + ': ' + r.oldStatus + ' \u2192 ' + r.newStatus;
+        const title = r.description ? r.description.replace(/^\[.*?\]\(.*?\)\s*/, '') : '';
+        li.textContent = r.id + (title ? ' ' + title : '') + ': ' + r.oldStatus + ' \u2192 ' + r.newStatus;
         if (r.oldPriority !== r.newPriority) li.textContent += ' (' + r.oldPriority + ' \u2192 ' + r.newPriority + ')';
         if (r.doneDateSet) li.textContent += ' [Done]';
         ul.appendChild(li);
@@ -909,7 +910,8 @@ function renderLogEntry(entry) {
       ul.className = 'log-errors';
       for (const e of entry.errors) {
         const li = document.createElement('li');
-        li.textContent = e.id + ': ' + e.error;
+        const errTitle = e.description ? e.description.replace(/^\[.*?\]\(.*?\)\s*/, '') : '';
+        li.textContent = e.id + (errTitle ? ' ' + errTitle : '') + ': ' + e.error;
         ul.appendChild(li);
       }
       details.appendChild(ul);

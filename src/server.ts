@@ -82,6 +82,7 @@ async function runAutoUpdate(): Promise<void> {
       timestamp: new Date().toISOString(),
       results: results.map((r) => ({
         id: r.id,
+        description: r.description,
         oldStatus: r.oldStatus,
         newStatus: r.newStatus,
         oldPriority: r.oldPriority,
@@ -89,7 +90,7 @@ async function runAutoUpdate(): Promise<void> {
         doneDateSet: r.doneDateSet,
       })),
       discoveredCount: discovered.length,
-      errors: errors.map((e) => ({ id: e.id, error: e.error })),
+      errors: errors.map((e) => ({ id: e.id, description: e.description, error: e.error })),
       source: "auto",
     };
     appendLogEntry(watcher.getDir(), entry);
@@ -253,6 +254,7 @@ const server = Bun.serve({
           timestamp: new Date().toISOString(),
           results: results.map((r) => ({
             id: r.id,
+            description: r.description,
             oldStatus: r.oldStatus,
             newStatus: r.newStatus,
             oldPriority: r.oldPriority,
@@ -260,7 +262,7 @@ const server = Bun.serve({
             doneDateSet: r.doneDateSet,
           })),
           discoveredCount: discovered.length,
-          errors: errors.map((e) => ({ id: e.id, error: e.error })),
+          errors: errors.map((e) => ({ id: e.id, description: e.description, error: e.error })),
           source: "manual",
         };
         appendLogEntry(watcher.getDir(), entry);
