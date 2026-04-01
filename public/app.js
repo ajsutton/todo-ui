@@ -81,6 +81,7 @@ function connectWebSocket() {
     if (msg.type === 'state') {
       state = msg.data;
       renderTable();
+      refreshOpenDetail();
     } else if (msg.type === 'update-progress') {
       handleUpdateProgress(msg.data);
     } else if (msg.type === 'claude-status') {
@@ -96,11 +97,125 @@ function connectWebSocket() {
   };
 }
 
+// Stats
+function renderStats() {
+  const bar = document.getElementById('stats-bar');
+  if (!bar) return;
+
+  const all = state.items;
+  const active = all.filter(i => !i.doneDate);
+  const done = all.filter(i => !!i.doneDate);
+  const blocked = active.filter(i => i.blocked);
+  const today = new Date().toISOString().slice(0, 10);
+  const overdue = active.filter(i => i.due && i.due < today);
+  const highPriority = active.filter(i => i.priority === 'P0' || i.priority === 'P1');
+
+  // Done in last 7 days
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const doneThisWeek = done.filter(i => i.doneDate >= weekAgo);
+
+  // Completion rate
+  const totalCount = all.length;
+  const donePercent = totalCount > 0 ? Math.round((done.length / totalCount) * 100) : 0;
+
+  // Type breakdown for subtitle
+  const reviews = active.filter(i => i.type === 'Review').length;
+  const prs = active.filter(i => i.type === 'PR').length;
+
+  const cards = [
+    {
+      value: active.length,
+      label: 'Active',
+      cls: 'stat-active',
+      sub: reviews || prs ? `${reviews} reviews, ${prs} PRs` : '',
+    },
+    {
+      value: highPriority.length,
+      label: 'High Priority',
+      cls: highPriority.length > 0 ? 'stat-p1' : '',
+      sub: 'P0 + P1',
+    },
+    {
+      value: blocked.length,
+      label: 'Blocked',
+      cls: blocked.length > 0 ? 'stat-blocked' : '',
+      sub: blocked.length > 0 ? blocked.map(i => i.id).slice(0, 3).join(', ') : 'None',
+    },
+    {
+      value: overdue.length,
+      label: 'Overdue',
+      cls: overdue.length > 0 ? 'stat-overdue' : '',
+      sub: overdue.length > 0 ? overdue.map(i => i.id).slice(0, 3).join(', ') : 'All on track',
+    },
+    {
+      value: doneThisWeek.length,
+      label: 'Done This Week',
+      cls: 'stat-done',
+      sub: `${donePercent}% total completion`,
+      bar: { percent: donePercent, color: 'var(--status-pass)' },
+    },
+  ];
+
+  bar.innerHTML = cards.map(c => `
+    <div class="stat-card">
+      <span class="stat-value ${c.cls}">${c.value}</span>
+      <span class="stat-label">${c.label}</span>
+      ${c.sub ? `<span class="stat-sub">${c.sub}</span>` : ''}
+      ${c.bar ? `<div class="stat-bar-track"><div class="stat-bar-fill" style="width:${c.bar.percent}%;background:${c.bar.color}"></div></div>` : ''}
+    </div>
+  `).join('');
+}
+
+// Icon helpers
+const TYPE_EMOJI = { Review: '👀', PR: '🔀', Workstream: '🏗️', Issue: '🐛' };
+
+function typeLabel(t) {
+  return TYPE_EMOJI[t] || '📌';
+}
+
+// Priority icons — SVG urgency indicators (shape + color, like Linear/Jira)
+const PRIORITY_ICONS = {
+  P0: `<svg class="priority-icon" viewBox="0 0 16 16" width="16" height="16"><path d="M8 1l1.5 3.5L13 5l-2.5 2.5L11 11.5 8 9.5 5 11.5l.5-4L3 5l3.5-.5z" fill="#e53e3e" stroke="#e53e3e" stroke-width=".5"/><line x1="3" y1="13" x2="13" y2="13" stroke="#e53e3e" stroke-width="2" stroke-linecap="round"/></svg>`,
+  P1: `<svg class="priority-icon" viewBox="0 0 16 16" width="16" height="16"><rect x="2" y="3" width="12" height="10" rx="2" fill="none" stroke="#dd6b20" stroke-width="1.5"/><path d="M5 6.5h6M5 9.5h4" stroke="#dd6b20" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="3" r="2.5" fill="#dd6b20"/></svg>`,
+  P2: `<svg class="priority-icon" viewBox="0 0 16 16" width="16" height="16"><path d="M4 12V4l4 2.5L4 9" fill="none" stroke="#d69e2e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><line x1="4" y1="12" x2="4" y2="4" stroke="#d69e2e" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  P3: `<svg class="priority-icon" viewBox="0 0 16 16" width="16" height="16"><line x1="4" y1="8" x2="12" y2="8" stroke="#718096" stroke-width="2" stroke-linecap="round"/></svg>`,
+  P4: `<svg class="priority-icon" viewBox="0 0 16 16" width="16" height="16"><path d="M4 4l4 4-4 4" fill="none" stroke="#a0aec0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  P5: `<svg class="priority-icon" viewBox="0 0 16 16" width="16" height="16"><circle cx="8" cy="8" r="2" fill="#cbd5e0"/></svg>`,
+};
+
+function priorityIcon(p) {
+  return PRIORITY_ICONS[p] || '';
+}
+
+function statusEmoji(item) {
+  const s = item.status.toLowerCase();
+  if (item.blocked) return '🚫';
+  if (item.doneDate) {
+    if (s.includes('merged')) return '✅';
+    if (s.includes('closed')) return '🗑️';
+    if (s.includes('approved')) return '👍';
+    return '✅';
+  }
+  // Merge queue
+  if (s.includes('merge queue')) return '🚂';
+  // Ready to merge: approved + CI passing, not draft
+  if (s.includes('approved') && s.includes('ci passing')) return '🚀';
+  if (s.includes('approved')) return '👍';
+  if (s.includes('draft')) return '📝';
+  if (s.includes('failing')) return '❌';
+  if (s.includes('ci passing')) return '✅';
+  if (s.includes('conflict')) return '⚠️';
+  if (s.includes('changes requested')) return '🔄';
+  return '';
+}
+
 // Rendering
 function renderTable() {
   let items = [...state.items];
   items = filterItems(items);
   items = sortItems(items);
+
+  renderStats();
 
   const tbody = document.getElementById('todo-body');
   tbody.innerHTML = '';
@@ -130,21 +245,23 @@ function renderTable() {
     });
     tr.appendChild(tdDesc);
 
-    // Type cell
-    const tdType = document.createElement('td');
-    tdType.textContent = item.type;
-    tr.appendChild(tdType);
-
-    // Status cell
+    // Status cell (moved before Type)
     const tdStatus = document.createElement('td');
-    tdStatus.textContent = item.status;
+    const sEmoji = statusEmoji(item);
+    tdStatus.textContent = (sEmoji ? sEmoji + ' ' : '') + item.status;
     if (item.status.toLowerCase().includes('failing')) tdStatus.classList.add('status-failing');
     if (item.status.toLowerCase().includes('passing')) tdStatus.classList.add('status-passing');
     tr.appendChild(tdStatus);
 
+    // Type cell — emoji only, text on hover
+    const tdType = document.createElement('td');
+    tdType.classList.add('type-cell');
+    tdType.innerHTML = `<span class="type-icon" title="${item.type}">${typeLabel(item.type)}</span>`;
+    tr.appendChild(tdType);
+
     // Priority cell — click to cycle
     const tdPriority = document.createElement('td');
-    tdPriority.textContent = item.priority;
+    tdPriority.innerHTML = priorityIcon(item.priority) + ' ' + item.priority;
     tdPriority.classList.add('priority-' + item.priority.toLowerCase());
     tdPriority.classList.add('editable');
     tdPriority.onclick = (e) => {
@@ -268,6 +385,13 @@ async function showDetail(id) {
   } catch (err) {
     content.innerHTML = '<p>Error loading details.</p>';
   }
+}
+
+function refreshOpenDetail() {
+  const panel = document.getElementById('detail-panel');
+  if (!panel.classList.contains('visible')) return;
+  const id = document.getElementById('detail-title').textContent;
+  if (id) showDetail(id);
 }
 
 // Actions
@@ -1086,6 +1210,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('detail-panel').classList.remove('visible');
     syncUrl();
   };
+
+  // Click outside detail panel to close it
+  document.addEventListener('click', (e) => {
+    const panel = document.getElementById('detail-panel');
+    if (!panel.classList.contains('visible')) return;
+    if (!panel.contains(e.target) && !e.target.closest('#todo-body')) {
+      panel.classList.remove('visible');
+      syncUrl();
+    }
+  });
 
   // Escape to close panels/dialogs
   document.addEventListener('keydown', (e) => {
