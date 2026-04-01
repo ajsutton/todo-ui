@@ -31,6 +31,7 @@ export interface GhPrStatus {
   statusCheckRollup: string;
   reviewDecision: string;
   mergeable: string;
+  isInMergeQueue: boolean;
 }
 
 export type ClaudeChunk =

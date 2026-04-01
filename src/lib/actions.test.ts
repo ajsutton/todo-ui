@@ -212,6 +212,7 @@ describe("buildStatusString", () => {
       statusCheckRollup: "",
       reviewDecision: "",
       mergeable: "",
+      isInMergeQueue: false,
     });
     expect(result).toBe("Merged");
   });
@@ -223,6 +224,7 @@ describe("buildStatusString", () => {
       statusCheckRollup: "FAILURE",
       reviewDecision: "",
       mergeable: "",
+      isInMergeQueue: false,
     });
     expect(result).toBe("Draft, CI failing");
   });
@@ -234,8 +236,21 @@ describe("buildStatusString", () => {
       statusCheckRollup: "SUCCESS",
       reviewDecision: "APPROVED",
       mergeable: "CONFLICTING",
+      isInMergeQueue: false,
     });
     expect(result).toBe("Open, CI passing, approved, merge conflict");
+  });
+
+  it("returns In merge queue when PR is queued", () => {
+    const result = buildStatusString({
+      state: "OPEN",
+      isDraft: false,
+      statusCheckRollup: "PENDING",
+      reviewDecision: "APPROVED",
+      mergeable: "MERGEABLE",
+      isInMergeQueue: true,
+    });
+    expect(result).toBe("In merge queue");
   });
 
   it("returns Closed for closed PR", () => {
@@ -245,6 +260,7 @@ describe("buildStatusString", () => {
       statusCheckRollup: "",
       reviewDecision: "",
       mergeable: "",
+      isInMergeQueue: false,
     });
     expect(result).toBe("Closed");
   });

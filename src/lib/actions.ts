@@ -7,6 +7,7 @@ const SEARCH_ORG = "ethereum-optimism";
 export function buildStatusString(ghStatus: GhPrStatus): string {
   if (ghStatus.state === "MERGED") return "Merged";
   if (ghStatus.state === "CLOSED") return "Closed";
+  if (ghStatus.isInMergeQueue) return "In merge queue";
 
   const parts: string[] = [];
 
@@ -170,6 +171,7 @@ function parseGhPrJson(json: string): GhPrStatus {
     statusCheckRollup: rollupStatus,
     reviewDecision: (raw["reviewDecision"] as string) ?? "",
     mergeable: (raw["mergeable"] as string) ?? "",
+    isInMergeQueue: raw["mergeQueueEntry"] != null,
   };
 }
 
@@ -202,7 +204,7 @@ export async function refreshPrStatus(
     "--repo",
     `${owner}/${repo}`,
     "--json",
-    "state,isDraft,statusCheckRollup,reviewDecision,mergeable",
+    "state,isDraft,statusCheckRollup,reviewDecision,mergeable,mergeQueueEntry",
   ]);
 
   const output = await new Response(proc.stdout).text();
@@ -287,7 +289,7 @@ async function getGhUser(): Promise<string> {
 async function ghPrView(repo: string, number: number): Promise<Record<string, unknown> | null> {
   const proc = Bun.spawn([
     "gh", "pr", "view", String(number), "--repo", repo,
-    "--json", "state,isDraft,statusCheckRollup,reviewDecision,mergeable,mergeStateStatus,mergedAt,closedAt",
+    "--json", "state,isDraft,statusCheckRollup,reviewDecision,mergeable,mergeStateStatus,mergedAt,closedAt,mergeQueueEntry",
   ]);
   const output = await new Response(proc.stdout).text();
   const exitCode = await proc.exited;
@@ -333,6 +335,7 @@ interface BatchResult {
   mergeable?: string;
   mergeStateStatus?: string;
   statusCheckRollup?: Array<Record<string, unknown>>;
+  isInMergeQueue?: boolean;
   // Issue fields
   assignees?: Array<{ login: string }>;
   // Review fields (for Review items)
@@ -363,6 +366,7 @@ async function ghBatchQuery(
               reviewDecision
               mergeable
               mergeStateStatus
+              mergeQueueEntry { id }
               statusCheckRollup: commits(last: 1) {
                 nodes {
                   commit {
@@ -420,6 +424,7 @@ async function ghBatchQuery(
         result.reviewDecision = (pr["reviewDecision"] as string) ?? "";
         result.mergeable = (pr["mergeable"] as string) ?? "";
         result.mergeStateStatus = (pr["mergeStateStatus"] as string) ?? "";
+        result.isInMergeQueue = pr["mergeQueueEntry"] != null;
 
         // Extract status check rollup from commits
         const commits = pr["statusCheckRollup"] as Record<string, unknown> | undefined;
@@ -734,6 +739,7 @@ function processFetchedItem(
       statusCheckRollup: ciStatus,
       reviewDecision: data.reviewDecision ?? "",
       mergeable: data.mergeable ?? "",
+      isInMergeQueue: data.isInMergeQueue ?? false,
     };
     let statusStr = buildStatusString(ghStatus);
     let priority = item.priority;
@@ -744,6 +750,8 @@ function processFetchedItem(
       statusStr = "Merged"; done = today; priority = "P1";
     } else if (ghStatus.state === "CLOSED") {
       statusStr = "Closed"; done = today;
+    } else if (ghStatus.isInMergeQueue) {
+      priority = "P5";
     } else if (!ghStatus.isDraft && ghStatus.reviewDecision === "APPROVED" && ghStatus.statusCheckRollup === "SUCCESS") {
       priority = "P1";
     }
@@ -761,6 +769,7 @@ function processFetchedItem(
     const isDraft = data.isDraft ?? false;
     const ci = computeCiStatusFromBatch(data.statusCheckRollup ?? []);
     const mergeState = data.mergeStateStatus ?? "";
+    const isInMergeQueue = data.isInMergeQueue ?? false;
 
     let status = "";
     let priority = item.priority;
@@ -770,6 +779,9 @@ function processFetchedItem(
     if (state === "MERGED" || state === "CLOSED") {
       status = state === "MERGED" ? "Merged" : "Closed";
       done = today;
+    } else if (isInMergeQueue) {
+      status = "In merge queue";
+      priority = "P5";
     } else if (ghUser && data.reviews !== undefined) {
       // Check if user is still a requested reviewer or has reviewed
       const userReviews = data.reviews.filter((r) => r.user?.login === ghUser);
@@ -796,6 +808,7 @@ function processFetchedItem(
       const ghStatus: GhPrStatus = {
         state, isDraft, statusCheckRollup: ci,
         reviewDecision: data.reviewDecision ?? "", mergeable: data.mergeable ?? "",
+        isInMergeQueue,
       };
       status = buildStatusString(ghStatus);
     }
@@ -929,11 +942,15 @@ function updateWorkstreamDetailWithData(
     const mergeable = data.mergeable ?? "";
     const ci = computeCiStatusFromBatch(data.statusCheckRollup ?? []);
 
+    const isInMergeQueue = data.isInMergeQueue ?? false;
+
     let newStatus: string;
     if (state === "MERGED") {
       newStatus = "Merged";
     } else if (state === "CLOSED") {
       newStatus = "Closed";
+    } else if (isInMergeQueue) {
+      newStatus = "In merge queue";
     } else if (isDraft) {
       const parts = ["Draft"];
       if (mergeable === "CONFLICTING") parts.push("merge conflicts");
@@ -995,6 +1012,7 @@ function parseGhPrJsonRaw(raw: Record<string, unknown>): GhPrStatus {
     statusCheckRollup: computeCiStatus(raw),
     reviewDecision: (raw["reviewDecision"] as string) ?? "",
     mergeable: (raw["mergeable"] as string) ?? "",
+    isInMergeQueue: raw["mergeQueueEntry"] != null,
   };
 }
 
