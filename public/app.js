@@ -86,9 +86,8 @@ function connectWebSocket() {
       handleUpdateProgress(msg.data);
     } else if (msg.type === 'claude-status') {
       handleClaudeStatus(msg.data);
-    } else if (msg.type === 'pending-discovered') {
-      handlePendingDiscovered(msg.data);
-      if (msg.data.timestamp) setLastUpdate(msg.data.timestamp);
+    } else if (msg.type === 'items-auto-added') {
+      showAutoAddedNotice(msg.data);
     } else if (msg.type === 'reload') {
       // Debounce reload — wait 30s after last change to allow all pending writes to complete
       clearTimeout(window._reloadTimer);
@@ -575,111 +574,44 @@ function showUpdateDialog(results, discovered, errors) {
     content.appendChild(section);
   }
 
-  // Discovered items section
+  // Auto-added items section (items are added automatically now)
   if (hasDiscovered) {
-    const reviews = discovered.filter(d => d.type === 'Review');
-    const prs = discovered.filter(d => d.type === 'PR');
+    const section = document.createElement('div');
+    section.className = 'discovery-section';
+    const h3 = document.createElement('h3');
+    h3.textContent = 'Auto-Added (' + discovered.length + ')';
+    section.appendChild(h3);
 
-    renderDiscoverySection(content, 'Review Requests', reviews);
-    renderDiscoverySection(content, 'Your PRs', prs);
-
-    // Show actions bar with select-all and add button
-    actions.classList.remove('hidden');
-    const selectAll = document.getElementById('discovery-select-all');
-    selectAll.checked = true;
-    selectAll.onchange = () => {
-      content.querySelectorAll('.discovery-item input[type="checkbox"]').forEach(cb => { cb.checked = selectAll.checked; });
-    };
-    content.addEventListener('change', (e) => {
-      if (e.target === selectAll) return;
-      if (!e.target.closest('.discovery-item')) return;
-      const all = content.querySelectorAll('.discovery-item input[type="checkbox"]');
-      selectAll.checked = [...all].every(cb => cb.checked);
-    });
-    dialog._discovered = discovered;
+    const ul = document.createElement('ul');
+    ul.className = 'changes-list';
+    for (const d of discovered) {
+      const li = document.createElement('li');
+      const typeSpan = document.createElement('span');
+      typeSpan.className = 'change-id';
+      typeSpan.textContent = d.type;
+      li.appendChild(typeSpan);
+      const link = document.createElement('a');
+      link.href = d.url;
+      link.target = '_blank';
+      link.textContent = d.repo.replace('ethereum-optimism/', '') + '#' + d.prNumber;
+      li.appendChild(link);
+      li.appendChild(document.createTextNode(' ' + d.title));
+      ul.appendChild(li);
+    }
+    section.appendChild(ul);
+    content.appendChild(section);
+    actions.classList.add('hidden');
+    dialog._discovered = [];
   } else {
     actions.classList.add('hidden');
     dialog._discovered = [];
   }
 
-  dialog._isPending = false;
   dialog.classList.remove('hidden');
-}
-
-function renderDiscoverySection(container, title, items) {
-  if (items.length === 0) return;
-  const section = document.createElement('div');
-  section.className = 'discovery-section';
-  const h3 = document.createElement('h3');
-  h3.textContent = title;
-  section.appendChild(h3);
-
-  for (const item of items) {
-    const row = document.createElement('label');
-    row.className = 'discovery-item';
-
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = true;
-    cb.dataset.repo = item.repo;
-    cb.dataset.prNumber = item.prNumber;
-    row.appendChild(cb);
-
-    const info = document.createElement('div');
-    info.className = 'discovery-item-info';
-
-    const titleSpan = document.createElement('span');
-    titleSpan.className = 'discovery-item-title';
-    const link = document.createElement('a');
-    link.href = item.url;
-    link.target = '_blank';
-    link.rel = 'noopener';
-    link.textContent = item.repo.replace('ethereum-optimism/', '') + '#' + item.prNumber;
-    link.onclick = (e) => e.stopPropagation();
-    titleSpan.appendChild(link);
-    titleSpan.appendChild(document.createTextNode(' ' + item.title));
-    info.appendChild(titleSpan);
-
-    const meta = document.createElement('span');
-    meta.className = 'discovery-item-meta';
-    meta.textContent = item.type === 'Review' ? item.author + ' \u00b7 ' + item.suggestedPriority : item.suggestedPriority;
-    info.appendChild(meta);
-
-    row.appendChild(info);
-    section.appendChild(row);
-  }
-  container.appendChild(section);
 }
 
 function closeUpdateDialog() {
   document.getElementById('update-dialog').classList.add('hidden');
-}
-
-async function addDiscoveredItems() {
-  const dialog = document.getElementById('update-dialog');
-  const content = document.getElementById('update-dialog-content');
-  const discovered = dialog._discovered || [];
-
-  const checked = new Set();
-  content.querySelectorAll('.discovery-item input[type="checkbox"]:checked').forEach(cb => {
-    checked.add(cb.dataset.repo + '#' + cb.dataset.prNumber);
-  });
-
-  const selected = discovered.filter(d => checked.has(d.repo + '#' + d.prNumber));
-  closeUpdateDialog();
-
-  if (selected.length === 0) return;
-
-  try {
-    const res = await fetch('/api/add-discovered', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: selected }),
-    });
-    if (!res.ok) throw new Error(await res.text());
-  } catch (err) {
-    console.error('Failed to add discovered items:', err);
-  }
 }
 
 // Priority picker
@@ -901,60 +833,18 @@ async function fetchLastUpdateTime() {
   } catch {}
 }
 
-// Pending discovered items (from auto-updates)
-let pendingItems = [];
-let pendingTimestamp = '';
-
-function handlePendingDiscovered(data) {
-  pendingItems = data.items || [];
-  pendingTimestamp = data.timestamp || '';
+// Auto-added items notice
+function showAutoAddedNotice(data) {
+  const n = data.count || 0;
+  if (n === 0) return;
   const badge = document.getElementById('pending-badge');
   const count = document.getElementById('pending-count');
-  if (pendingItems.length > 0) {
-    count.textContent = pendingItems.length;
-    badge.classList.remove('hidden');
-  } else {
-    badge.classList.add('hidden');
-  }
+  count.textContent = `+${n} added`;
+  badge.classList.remove('hidden');
+  badge.title = `${n} new item${n === 1 ? '' : 's'} auto-added`;
+  setTimeout(() => badge.classList.add('hidden'), 8000);
 }
 
-function showPendingDialog() {
-  if (pendingItems.length === 0) return;
-  showUpdateDialog([], pendingItems, []);
-  const dialog = document.getElementById('update-dialog');
-  dialog._isPending = true;
-}
-
-async function addPendingItems() {
-  const dialog = document.getElementById('update-dialog');
-  const content = document.getElementById('update-dialog-content');
-  const discovered = dialog._discovered || [];
-
-  const checked = new Set();
-  content.querySelectorAll('.discovery-item input[type="checkbox"]:checked').forEach(cb => {
-    checked.add(cb.dataset.repo + '#' + cb.dataset.prNumber);
-  });
-
-  const selected = discovered.filter(d => checked.has(d.repo + '#' + d.prNumber));
-  closeUpdateDialog();
-
-  if (selected.length === 0) {
-    // Dismiss all
-    await fetch('/api/pending/dismiss', { method: 'POST' });
-    return;
-  }
-
-  try {
-    const res = await fetch('/api/pending/add', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: selected }),
-    });
-    if (!res.ok) throw new Error(await res.text());
-  } catch (err) {
-    console.error('Failed to add pending items:', err);
-  }
-}
 
 // Update log
 let logOffset = 0;
@@ -1135,9 +1025,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('filter-type').onchange = (e) => { filterType = e.target.value; renderTable(); };
   document.getElementById('filter-status').onchange = (e) => { filterStatus = e.target.value; renderTable(); };
 
-  // Pending items badge
-  document.getElementById('pending-badge').onclick = showPendingDialog;
-
   // Update log
   document.getElementById('show-log').onclick = (e) => { e.preventDefault(); showLogDialog(); };
   document.getElementById('log-dialog-close').onclick = closeLogDialog;
@@ -1148,24 +1035,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('refresh-all').onclick = refreshAll;
 
   // Update dialog
-  document.getElementById('discovery-skip').onclick = () => {
-    const dialog = document.getElementById('update-dialog');
-    if (dialog._isPending) {
-      fetch('/api/pending/dismiss', { method: 'POST' });
-    }
-    closeUpdateDialog();
-  };
+  document.getElementById('discovery-skip').onclick = closeUpdateDialog;
   document.getElementById('update-dialog-close').onclick = () => {
     closeUpdateDialog();
   };
-  document.getElementById('discovery-add').onclick = () => {
-    const dialog = document.getElementById('update-dialog');
-    if (dialog._isPending) {
-      addPendingItems();
-    } else {
-      addDiscoveredItems();
-    }
-  };
+  document.getElementById('discovery-add').onclick = closeUpdateDialog;
 
   // Claude prompt
   const claudeInput = document.getElementById('claude-prompt');

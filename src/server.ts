@@ -63,10 +63,6 @@ if (existsSync(configDir)) {
   });
 }
 
-// Pending discovered items from auto-updates (awaiting user review)
-let pendingDiscovered: DiscoveredItem[] = [];
-let pendingTimestamp = "";
-
 const AUTO_UPDATE_INTERVAL_MS = 15 * 60 * 1000;
 let autoUpdateRunning = false;
 
@@ -96,16 +92,13 @@ async function runAutoUpdate(): Promise<void> {
     appendLogEntry(watcher.getDir(), entry);
 
     if (discovered.length > 0) {
-      pendingDiscovered = discovered;
-      pendingTimestamp = entry.timestamp;
-      broadcast({
-        type: "pending-discovered",
-        data: { items: discovered, timestamp: pendingTimestamp },
-      });
+      addDiscoveredItems(watcher.getDir(), discovered);
+      watcher.reload();
+      broadcast({ type: "items-auto-added", data: { count: discovered.length, items: discovered } });
     }
 
     console.log(
-      `[auto-update] ${results.length} changes, ${discovered.length} discovered, ${errors.length} errors`,
+      `[auto-update] ${results.length} changes, ${discovered.length} discovered (auto-added), ${errors.length} errors`,
     );
   } catch (err) {
     console.error("[auto-update] failed:", err);
@@ -267,29 +260,13 @@ const server = Bun.serve({
         };
         appendLogEntry(watcher.getDir(), entry);
 
-        // Clear pending if manual refresh also finds items (user will see them in the dialog)
+        // Auto-add discovered items during manual refresh
         if (discovered.length > 0) {
-          pendingDiscovered = [];
-          pendingTimestamp = "";
-          broadcast({ type: "pending-discovered", data: { items: [], timestamp: "" } });
+          addDiscoveredItems(watcher.getDir(), discovered);
+          watcher.reload();
         }
 
         return jsonResponse({ ok: true, results, discovered, errors });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return jsonResponse({ error: message }, 500);
-      }
-    }
-
-    if (req.method === "POST" && pathname === "/api/add-discovered") {
-      try {
-        const body = (await req.json()) as { items?: DiscoveredItem[] };
-        if (!body.items || !Array.isArray(body.items) || body.items.length === 0) {
-          return jsonResponse({ error: "Missing items array" }, 400);
-        }
-        addDiscoveredItems(watcher.getDir(), body.items);
-        watcher.reload();
-        return jsonResponse({ ok: true, count: body.items.length });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return jsonResponse({ error: message }, 500);
@@ -356,38 +333,6 @@ const server = Bun.serve({
       return jsonResponse({ ok: true, requestId }, 202);
     }
 
-    // Pending discovered items from auto-updates
-    if (req.method === "GET" && pathname === "/api/pending") {
-      return jsonResponse({ items: pendingDiscovered, timestamp: pendingTimestamp });
-    }
-
-    if (req.method === "POST" && pathname === "/api/pending/dismiss") {
-      pendingDiscovered = [];
-      pendingTimestamp = "";
-      broadcast({ type: "pending-discovered", data: { items: [], timestamp: "" } });
-      return jsonResponse({ ok: true });
-    }
-
-    if (req.method === "POST" && pathname === "/api/pending/add") {
-      try {
-        const body = (await req.json()) as { items?: DiscoveredItem[] };
-        if (!body.items || !Array.isArray(body.items) || body.items.length === 0) {
-          return jsonResponse({ error: "Missing items array" }, 400);
-        }
-        addDiscoveredItems(watcher.getDir(), body.items);
-        // Remove added items from pending
-        const addedKeys = new Set(body.items.map((i) => `${i.repo}#${i.prNumber}`));
-        pendingDiscovered = pendingDiscovered.filter((d) => !addedKeys.has(`${d.repo}#${d.prNumber}`));
-        if (pendingDiscovered.length === 0) pendingTimestamp = "";
-        broadcast({ type: "pending-discovered", data: { items: pendingDiscovered, timestamp: pendingTimestamp } });
-        watcher.reload();
-        return jsonResponse({ ok: true, count: body.items.length });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return jsonResponse({ error: message }, 500);
-      }
-    }
-
     // Update log
     if (req.method === "GET" && pathname === "/api/log") {
       const limit = parseInt(url.searchParams.get("limit") ?? "50", 10);
@@ -404,12 +349,6 @@ const server = Bun.serve({
       clients.add(ws as WS);
       const state = watcher.getState();
       ws.send(JSON.stringify({ type: "state", data: state } satisfies WsMessage));
-      if (pendingDiscovered.length > 0) {
-        ws.send(JSON.stringify({
-          type: "pending-discovered",
-          data: { items: pendingDiscovered, timestamp: pendingTimestamp },
-        } satisfies WsMessage));
-      }
     },
     close(ws) {
       clients.delete(ws as WS);

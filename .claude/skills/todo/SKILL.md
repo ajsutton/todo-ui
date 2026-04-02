@@ -45,7 +45,7 @@ The user may say things like:
 
 ## Rules
 
-- **Never auto-create todo items** without the user specifically requesting it or confirming during `/todo update`. The update flow may discover new PRs and review requests, but must present them for confirmation before adding.
+- **New PRs and review requests are auto-added** during both background (15-min interval) and foreground (`/todo update`) refreshes. The server discovers untracked items and adds them automatically — no user confirmation needed.
 - **Never perform the next step on a TODO** without explicit request or confirmation from the user.
 - **Be conservative with GitHub API** to avoid rate limits. Batch queries where possible.
 - **Keep TODO.md minimal** — one line per item in a table. All general queries should be answerable from TODO.md alone.
@@ -308,7 +308,7 @@ Rules:
 
 - TODO.md is the single source of truth for all queries
 - Detail files are supplementary, not required
-- Never auto-create items without explicit request
+- New PRs and review requests are auto-added during updates
 - Never auto-advance work without confirmation
 - Priority guidelines evolve based on user preferences
 - Conservative GitHub API usage
