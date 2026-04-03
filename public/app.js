@@ -37,6 +37,8 @@ let filterStatus = urlParams.filterStatus;
 let searchQuery = urlParams.searchQuery;
 let ws = null;
 let reconnectAttempts = 0;
+let currentDetailRaw = null;
+let detailEditMode = false;
 
 // Prompt history (persisted in localStorage)
 const HISTORY_KEY = 'claude-prompt-history';
@@ -351,6 +353,10 @@ async function showDetail(id) {
   const title = document.getElementById('detail-title');
   const content = document.getElementById('detail-content');
 
+  if (detailEditMode) exitDetailEditMode(false);
+  currentDetailRaw = null;
+  document.getElementById('detail-edit').classList.add('hidden');
+
   title.textContent = id;
   content.innerHTML = '<p>Loading...</p>';
   panel.classList.add('visible');
@@ -360,7 +366,9 @@ async function showDetail(id) {
     const res = await fetch('/api/detail/' + id);
     if (res.ok) {
       const detail = await res.json();
+      currentDetailRaw = detail.content;
       content.innerHTML = detail.contentHtml;
+      document.getElementById('detail-edit').classList.remove('hidden');
     } else {
       // No detail file — show item info
       const item = state.items.find(i => i.id === id);
@@ -389,8 +397,123 @@ async function showDetail(id) {
 function refreshOpenDetail() {
   const panel = document.getElementById('detail-panel');
   if (!panel.classList.contains('visible')) return;
+  if (detailEditMode) return; // Don't refresh while editing
   const id = document.getElementById('detail-title').textContent;
   if (id) showDetail(id);
+}
+
+// Split markdown into alternating table/text segments
+function splitDetailSegments(markdown) {
+  const lines = markdown.split('\n');
+  const segments = [];
+  let currentType = null;
+  let currentLines = [];
+
+  for (const line of lines) {
+    const type = line.trimStart().startsWith('|') ? 'table' : 'text';
+    if (type !== currentType) {
+      if (currentLines.length > 0) {
+        segments.push({ type: currentType, lines: currentLines });
+      }
+      currentType = type;
+      currentLines = [];
+    }
+    currentLines.push(line);
+  }
+  if (currentLines.length > 0) {
+    segments.push({ type: currentType, lines: currentLines });
+  }
+  return segments;
+}
+
+function enterDetailEditMode() {
+  if (!currentDetailRaw) return;
+  detailEditMode = true;
+
+  document.getElementById('detail-edit').classList.add('hidden');
+  document.getElementById('detail-save').classList.remove('hidden');
+  document.getElementById('detail-cancel').classList.remove('hidden');
+
+  const content = document.getElementById('detail-content');
+  const segments = splitDetailSegments(currentDetailRaw);
+  content.innerHTML = '';
+
+  for (const seg of segments) {
+    const segContent = seg.lines.join('\n');
+    if (seg.type === 'table') {
+      const div = document.createElement('div');
+      div.className = 'detail-locked-section';
+      const label = document.createElement('span');
+      label.className = 'detail-locked-label';
+      label.textContent = 'Issues table (read-only)';
+      const pre = document.createElement('pre');
+      pre.textContent = segContent;
+      div.appendChild(label);
+      div.appendChild(pre);
+      content.appendChild(div);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.className = 'detail-edit-textarea';
+      textarea.value = segContent;
+      content.appendChild(textarea);
+    }
+  }
+}
+
+function exitDetailEditMode(reload) {
+  detailEditMode = false;
+  document.getElementById('detail-save').classList.add('hidden');
+  document.getElementById('detail-cancel').classList.add('hidden');
+  if (currentDetailRaw !== null) {
+    document.getElementById('detail-edit').classList.remove('hidden');
+  }
+  if (reload) {
+    const id = document.getElementById('detail-title').textContent;
+    if (id) showDetail(id);
+  }
+}
+
+async function saveDetailContent() {
+  const id = document.getElementById('detail-title').textContent;
+  if (!id || !currentDetailRaw) return;
+
+  const content = document.getElementById('detail-content');
+  const segments = splitDetailSegments(currentDetailRaw);
+  const textareas = [...content.querySelectorAll('textarea.detail-edit-textarea')];
+  let taIdx = 0;
+
+  const allLines = [];
+  for (const seg of segments) {
+    if (seg.type === 'table') {
+      allLines.push(...seg.lines);
+    } else {
+      const ta = textareas[taIdx++];
+      allLines.push(...(ta ? ta.value.split('\n') : seg.lines));
+    }
+  }
+  const newMarkdown = allLines.join('\n');
+
+  const saveBtn = document.getElementById('detail-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+
+  try {
+    const res = await fetch('/api/detail/' + id, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markdown: newMarkdown }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Save failed');
+    }
+    currentDetailRaw = newMarkdown;
+    exitDetailEditMode(true);
+  } catch (err) {
+    console.error('Failed to save detail:', err);
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save';
+  }
 }
 
 // Actions
@@ -1079,8 +1202,14 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.onclick = () => sendClaudePrompt(btn.dataset.prompt);
   });
 
+  // Detail panel edit/save/cancel
+  document.getElementById('detail-edit').onclick = () => enterDetailEditMode();
+  document.getElementById('detail-save').onclick = () => saveDetailContent();
+  document.getElementById('detail-cancel').onclick = () => exitDetailEditMode(true);
+
   // Detail panel close
   document.getElementById('detail-close').onclick = () => {
+    if (detailEditMode) exitDetailEditMode(false);
     document.getElementById('detail-panel').classList.remove('visible');
     syncUrl();
   };

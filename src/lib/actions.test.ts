@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { markComplete, markIncomplete, setPriority, setDue, buildStatusString } from "./actions.ts";
+import { markComplete, markIncomplete, setPriority, setDue, buildStatusString, saveDetailMarkdown } from "./actions.ts";
 
 const TODO_FIXTURE = `# TODO
 
@@ -400,5 +400,35 @@ describe("setDue edge cases", () => {
 
   it("rejects partial date like 2026-3-1", () => {
     expect(() => setDue(tmpDir, "TODO-1", "2026-3-1")).toThrow("Invalid date");
+  });
+});
+
+describe("saveDetailMarkdown", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "todo-test-"));
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("writes markdown to the correct detail file", () => {
+    const markdown = "# Notes\n\nSome details here.\n";
+    saveDetailMarkdown(tmpDir, "TODO-7", markdown);
+    const written = readFileSync(join(tmpDir, "TODO-7.md"), "utf-8");
+    expect(written).toBe(markdown);
+  });
+
+  it("overwrites existing detail file", () => {
+    writeFileSync(join(tmpDir, "TODO-3.md"), "old content", "utf-8");
+    saveDetailMarkdown(tmpDir, "TODO-3", "new content");
+    expect(readFileSync(join(tmpDir, "TODO-3.md"), "utf-8")).toBe("new content");
+  });
+
+  it("handles multi-digit IDs correctly", () => {
+    saveDetailMarkdown(tmpDir, "TODO-42", "content for 42");
+    expect(readFileSync(join(tmpDir, "TODO-42.md"), "utf-8")).toBe("content for 42");
   });
 });

@@ -11,6 +11,7 @@ import {
   updateAll,
   addDiscoveredItems,
   runClaudePrompt,
+  saveDetailMarkdown,
 } from "./lib/actions.ts";
 import { appendLogEntry, getLogEntries } from "./lib/update-log.ts";
 import type { DiscoveredItem, UpdateLogEntry } from "./types.ts";
@@ -176,6 +177,21 @@ const server = Bun.serve({
       const detail = watcher.getDetail(id);
       if (!detail) return jsonResponse({ error: "Not found" }, 404);
       return jsonResponse(detail);
+    }
+
+    if (req.method === "POST" && pathname.startsWith("/api/detail/")) {
+      const id = extractIdFromPath(pathname, "/api/detail/");
+      if (!id) return jsonResponse({ error: "Missing id" }, 400);
+      try {
+        const body = (await req.json()) as { markdown?: string };
+        if (typeof body.markdown !== "string") return jsonResponse({ error: "Missing markdown" }, 400);
+        saveDetailMarkdown(watcher.getDir(), id, body.markdown);
+        watcher.reload();
+        return jsonResponse({ ok: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return jsonResponse({ error: message }, 500);
+      }
     }
 
     if (req.method === "POST" && pathname.startsWith("/api/complete/")) {
