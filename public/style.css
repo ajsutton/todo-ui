@@ -507,29 +507,13 @@ tr:hover td {
 }
 
 .detail-locked-section {
-  background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 4px;
   margin: 0.5em 0;
-  padding: 8px 12px;
-}
-
-.detail-locked-label {
-  display: block;
-  font-size: 11px;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 6px;
-}
-
-.detail-locked-section pre {
-  margin: 0;
-  font-size: 12px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  color: var(--fg-secondary);
-  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+  padding: 4px 8px;
+  opacity: 0.8;
+  pointer-events: none;
+  user-select: none;
 }
 
 .detail-edit-textarea {
