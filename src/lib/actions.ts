@@ -138,6 +138,12 @@ export function setDue(todoDir: string, id: string, due: string): void {
   atomicWrite(filePath, updated);
 }
 
+export function saveDetailMarkdown(todoDir: string, id: string, markdown: string): void {
+  const number = id.replace("TODO-", "");
+  const filePath = path.join(todoDir, `TODO-${number}.md`);
+  atomicWrite(filePath, markdown);
+}
+
 function parseGhPrJson(json: string): GhPrStatus {
   const raw = JSON.parse(json) as Record<string, unknown>;
 
