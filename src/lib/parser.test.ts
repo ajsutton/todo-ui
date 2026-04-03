@@ -101,4 +101,117 @@ describe("parseTodoMarkdown", () => {
     expect(items.every((item) => item.id.startsWith("TODO-"))).toBe(true);
     expect(items).toHaveLength(3);
   });
+
+  it("parses done date into doneDate field", () => {
+    const content = `| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+| TODO-1 | Fix bug | PR | Merged | P1 | | 2026-03-15 |
+| TODO-2 | Another | PR | Open | P2 | | |`;
+    const items = parseTodoMarkdown(content);
+    expect(items[0]!.doneDate).toBe("2026-03-15");
+    expect(items[1]!.doneDate).toBe("");
+  });
+
+  it("skips rows with empty ID", () => {
+    const content = `| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+|  | Empty ID row | PR | Open | P1 | | |
+| TODO-1 | Valid row | PR | Open | P1 | | |`;
+    const items = parseTodoMarkdown(content);
+    expect(items).toHaveLength(1);
+    expect(items[0]!.id).toBe("TODO-1");
+  });
+
+  it("stops parsing table at first non-pipe line", () => {
+    const content = `| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+| TODO-1 | Row one | PR | Open | P1 | | |
+| TODO-2 | Row two | PR | Open | P2 | | |
+
+Some prose after the table.
+
+| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+| TODO-3 | Should not be parsed | PR | Open | P3 | | |`;
+    const items = parseTodoMarkdown(content);
+    expect(items).toHaveLength(2);
+    expect(items.map((i) => i.id)).toEqual(["TODO-1", "TODO-2"]);
+  });
+
+  it("handles content without any table", () => {
+    const content = `# Just a heading\n\nSome text without a table.`;
+    const items = parseTodoMarkdown(content);
+    expect(items).toHaveLength(0);
+  });
+
+  it("accepts separator with spaces around dashes (| -- |)", () => {
+    const content = `| ID | Description | Type | Status | Priority | Due | Done |
+| -- | -- | -- | -- | -- | -- | -- |
+| TODO-1 | Item | PR | Open | P1 | | |`;
+    const items = parseTodoMarkdown(content);
+    expect(items).toHaveLength(1);
+    expect(items[0]!.id).toBe("TODO-1");
+  });
+
+  it("[BLOCKED] with no trailing text produces empty status", () => {
+    const content = `| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+| TODO-1 | Review | Review | [BLOCKED] | P2 | | |`;
+    const items = parseTodoMarkdown(content);
+    expect(items[0]!.blocked).toBe(true);
+    expect(items[0]!.status).toBe("");
+  });
+
+  it("renders markdown links in description as HTML anchor tags", () => {
+    const content = `| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+| TODO-1 | [my-org/repo#42](https://github.com/my-org/repo/pull/42) fix something | PR | Open | P1 | | |`;
+    const items = parseTodoMarkdown(content);
+    expect(items[0]!.descriptionHtml).toContain('<a href="https://github.com/my-org/repo/pull/42">');
+    expect(items[0]!.descriptionHtml).toContain("my-org/repo#42");
+  });
+
+  it("linkifies bare org/repo#number references in description", () => {
+    const content = `| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+| TODO-1 | Waiting on foo/bar#99 to merge | Workstream | Open | P2 | | |`;
+    const items = parseTodoMarkdown(content);
+    expect(items[0]!.descriptionHtml).toContain(
+      '<a href="https://github.com/foo/bar/issues/99"',
+    );
+    expect(items[0]!.descriptionHtml).toContain("foo/bar#99");
+  });
+
+  it("does not double-linkify already anchored references", () => {
+    const content = `| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+| TODO-1 | [foo/bar#99](https://github.com/foo/bar/pull/99) text | PR | Open | P1 | | |`;
+    const items = parseTodoMarkdown(content);
+    // Should have exactly one <a> tag for the reference, not two
+    const anchors = items[0]!.descriptionHtml.match(/<a /g) ?? [];
+    expect(anchors.length).toBe(1);
+  });
+
+  it("extracts PR number from issues URL", () => {
+    const content = `| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+| TODO-1 | [myorg/myrepo#7](https://github.com/myorg/myrepo/issues/7) track issue | Workstream | Open | P3 | | |`;
+    const items = parseTodoMarkdown(content);
+    expect(items[0]!.githubUrl).toBe("https://github.com/myorg/myrepo/issues/7");
+    expect(items[0]!.repo).toBe("myorg/myrepo");
+    expect(items[0]!.prNumber).toBe(7);
+  });
+
+  it("handles row with fewer columns than expected", () => {
+    const content = `| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+| TODO-1 | Short row | PR |`;
+    const items = parseTodoMarkdown(content);
+    expect(items).toHaveLength(1);
+    expect(items[0]!.id).toBe("TODO-1");
+    expect(items[0]!.description).toBe("Short row");
+    expect(items[0]!.type).toBe("PR");
+    expect(items[0]!.status).toBe("");
+    expect(items[0]!.priority).toBe("");
+  });
 });
