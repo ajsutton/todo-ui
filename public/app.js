@@ -38,6 +38,7 @@ let searchQuery = urlParams.searchQuery;
 let ws = null;
 let reconnectAttempts = 0;
 let currentDetailRaw = null;
+let currentDetailHtml = null;
 let detailEditMode = false;
 
 // Prompt history (persisted in localStorage)
@@ -355,6 +356,7 @@ async function showDetail(id) {
 
   if (detailEditMode) exitDetailEditMode(false);
   currentDetailRaw = null;
+  currentDetailHtml = null;
   document.getElementById('detail-edit').classList.add('hidden');
 
   title.textContent = id;
@@ -367,6 +369,7 @@ async function showDetail(id) {
     if (res.ok) {
       const detail = await res.json();
       currentDetailRaw = detail.content;
+      currentDetailHtml = detail.contentHtml;
       content.innerHTML = detail.contentHtml;
       document.getElementById('detail-edit').classList.remove('hidden');
     } else {
@@ -436,25 +439,26 @@ function enterDetailEditMode() {
 
   const content = document.getElementById('detail-content');
   const segments = splitDetailSegments(currentDetailRaw);
+
+  // Extract rendered <table> elements from the stored HTML in document order
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = currentDetailHtml;
+  const renderedTables = [...tempDiv.querySelectorAll('table')];
+  let tableIdx = 0;
+
   content.innerHTML = '';
 
   for (const seg of segments) {
-    const segContent = seg.lines.join('\n');
     if (seg.type === 'table') {
-      const div = document.createElement('div');
-      div.className = 'detail-locked-section';
-      const label = document.createElement('span');
-      label.className = 'detail-locked-label';
-      label.textContent = 'Issues table (read-only)';
-      const pre = document.createElement('pre');
-      pre.textContent = segContent;
-      div.appendChild(label);
-      div.appendChild(pre);
-      content.appendChild(div);
+      const wrapper = document.createElement('div');
+      wrapper.className = 'detail-locked-section';
+      const table = renderedTables[tableIdx++];
+      if (table) wrapper.appendChild(table);
+      content.appendChild(wrapper);
     } else {
       const textarea = document.createElement('textarea');
       textarea.className = 'detail-edit-textarea';
-      textarea.value = segContent;
+      textarea.value = seg.lines.join('\n');
       content.appendChild(textarea);
     }
   }
