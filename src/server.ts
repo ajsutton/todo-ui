@@ -14,6 +14,7 @@ import {
   saveDetailMarkdown,
 } from "./lib/actions.ts";
 import { appendLogEntry, getLogEntries } from "./lib/update-log.ts";
+import { generateStandupReport, buildStandupClaudePrompt } from "./lib/standup.ts";
 import type { DiscoveredItem, UpdateLogEntry } from "./types.ts";
 import type { WsMessage } from "./types.ts";
 
@@ -347,6 +348,66 @@ const server = Bun.serve({
       })();
 
       return jsonResponse({ ok: true, requestId }, 202);
+    }
+
+    // Standup report
+    if (req.method === "GET" && pathname === "/api/standup") {
+      try {
+        const state = watcher.getState();
+        const report = await generateStandupReport(watcher.getDir(), state.items);
+        return jsonResponse(report);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return jsonResponse({ error: message }, 500);
+      }
+    }
+
+    if (req.method === "POST" && pathname === "/api/standup/claude") {
+      try {
+        const state = watcher.getState();
+        const report = await generateStandupReport(watcher.getDir(), state.items);
+        const prompt = buildStandupClaudePrompt(report);
+        const requestId = crypto.randomUUID();
+
+        (async () => {
+          try {
+            broadcast({
+              type: "standup-status",
+              data: { requestId, status: "running", output: "" },
+            });
+
+            for await (const chunk of runClaudePrompt(CLAUDE_CWD, prompt)) {
+              if (chunk.kind === "text") {
+                broadcast({
+                  type: "standup-status",
+                  data: { requestId, status: "running", output: chunk.text },
+                });
+              } else if (chunk.kind === "activity") {
+                broadcast({
+                  type: "standup-status",
+                  data: { requestId, status: "running", output: "", activity: chunk.tool },
+                });
+              }
+            }
+
+            broadcast({
+              type: "standup-status",
+              data: { requestId, status: "done", output: "" },
+            });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            broadcast({
+              type: "standup-status",
+              data: { requestId, status: "error", output: message },
+            });
+          }
+        })();
+
+        return jsonResponse({ ok: true, requestId }, 202);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return jsonResponse({ error: message }, 500);
+      }
     }
 
     // Update log

@@ -89,6 +89,8 @@ function connectWebSocket() {
       handleUpdateProgress(msg.data);
     } else if (msg.type === 'claude-status') {
       handleClaudeStatus(msg.data);
+    } else if (msg.type === 'standup-status') {
+      handleStandupStatus(msg.data);
     } else if (msg.type === 'items-auto-added') {
       showAutoAddedNotice(msg.data);
     } else if (msg.type === 'reload') {
@@ -1104,6 +1106,304 @@ function closeLogDialog() {
   document.getElementById('log-dialog').classList.add('hidden');
 }
 
+// Standup dialog
+let activeStandupTab = 'report';
+
+async function showStandupDialog() {
+  const dialog = document.getElementById('standup-dialog');
+  dialog.classList.remove('hidden');
+  switchStandupTab('report');
+  await loadStandupReport();
+}
+
+function closeStandupDialog() {
+  document.getElementById('standup-dialog').classList.add('hidden');
+}
+
+function switchStandupTab(tab) {
+  activeStandupTab = tab;
+  document.querySelectorAll('#standup-dialog .tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+  document.getElementById('standup-tab-report').classList.toggle('hidden', tab !== 'report');
+  document.getElementById('standup-tab-claude').classList.toggle('hidden', tab !== 'claude');
+}
+
+async function loadStandupReport() {
+  const content = document.getElementById('standup-tab-report');
+  content.innerHTML = '<p style="padding:16px;color:var(--muted)">Loading...</p>';
+  try {
+    const res = await fetch('/api/standup');
+    if (!res.ok) throw new Error(await res.text());
+    const report = await res.json();
+    content.innerHTML = '';
+    content.appendChild(renderStandupReport(report));
+  } catch (err) {
+    content.innerHTML = '<p style="padding:16px;color:var(--status-fail)">Error loading report: ' + err.message + '</p>';
+  }
+}
+
+function descText(description) {
+  // Strip leading markdown link prefix [text](url) from description for display
+  return description.replace(/^\[.*?\]\(.*?\)\s*/, '').trim() || description;
+}
+
+function descHtml(description, githubUrl) {
+  const text = descText(description);
+  if (githubUrl) {
+    return `<a href="${githubUrl}" target="_blank" rel="noopener">${escHtml(text)}</a>`;
+  }
+  return escHtml(text);
+}
+
+function escHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function renderStandupReport(report) {
+  const root = document.createElement('div');
+
+  // Yesterday section
+  const ySection = document.createElement('div');
+  ySection.className = 'standup-section';
+
+  const yHeading = document.createElement('h3');
+  yHeading.className = 'standup-day-heading';
+  yHeading.textContent = `Yesterday (${report.yesterdayDate})`;
+  ySection.appendChild(yHeading);
+
+  // Done items
+  const doneSection = document.createElement('div');
+  doneSection.className = 'standup-section';
+  const doneTitle = document.createElement('div');
+  doneTitle.className = 'standup-section-title';
+  doneTitle.textContent = 'Completed';
+  doneSection.appendChild(doneTitle);
+
+  if (report.yesterday.done.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'standup-empty';
+    empty.textContent = 'No items completed';
+    doneSection.appendChild(empty);
+  } else {
+    const ul = document.createElement('ul');
+    ul.className = 'standup-list';
+    for (const item of report.yesterday.done) {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="standup-item-id">${escHtml(item.id)}</span>` +
+        `<span class="standup-item-desc">${descHtml(item.description, item.githubUrl)}</span>` +
+        `<span class="standup-item-badge">${escHtml(item.type)}</span>`;
+      ul.appendChild(li);
+    }
+    doneSection.appendChild(ul);
+  }
+  ySection.appendChild(doneSection);
+
+  // Status changes
+  if (report.yesterday.statusChanges.length > 0) {
+    const changesSection = document.createElement('div');
+    changesSection.className = 'standup-section';
+    const changesTitle = document.createElement('div');
+    changesTitle.className = 'standup-section-title';
+    changesTitle.textContent = 'Status Changes';
+    changesSection.appendChild(changesTitle);
+    const ul = document.createElement('ul');
+    ul.className = 'standup-list';
+    for (const c of report.yesterday.statusChanges) {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="standup-item-id">${escHtml(c.id)}</span>` +
+        `<span class="standup-item-desc">${descHtml(c.description, c.githubUrl)}</span>` +
+        `<span class="standup-arrow">${escHtml(c.oldStatus)} → ${escHtml(c.newStatus)}</span>`;
+      ul.appendChild(li);
+    }
+    changesSection.appendChild(ul);
+    ySection.appendChild(changesSection);
+  }
+
+  // GitHub activity
+  if (report.yesterday.githubActivity.length > 0) {
+    const ghSection = document.createElement('div');
+    ghSection.className = 'standup-section';
+    const ghTitle = document.createElement('div');
+    ghTitle.className = 'standup-section-title';
+    ghTitle.textContent = 'GitHub Activity';
+    ghSection.appendChild(ghTitle);
+    const ul = document.createElement('ul');
+    ul.className = 'standup-list';
+    for (const a of report.yesterday.githubActivity) {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="standup-item-badge">${escHtml(a.action)}</span>` +
+        `<span class="standup-item-desc"><a href="${escHtml(a.url)}" target="_blank" rel="noopener">${escHtml(a.title)}</a></span>` +
+        `<span class="standup-item-id">${escHtml(a.repo)}</span>`;
+      ul.appendChild(li);
+    }
+    ghSection.appendChild(ul);
+    ySection.appendChild(ghSection);
+  }
+
+  root.appendChild(ySection);
+
+  // Today section
+  const tSection = document.createElement('div');
+  tSection.className = 'standup-section';
+
+  const tHeading = document.createElement('h3');
+  tHeading.className = 'standup-day-heading';
+  tHeading.textContent = `Today (${report.date})`;
+  tSection.appendChild(tHeading);
+
+  // High priority
+  const hpSection = document.createElement('div');
+  hpSection.className = 'standup-section';
+  const hpTitle = document.createElement('div');
+  hpTitle.className = 'standup-section-title';
+  hpTitle.textContent = 'High Priority (P0/P1)';
+  hpSection.appendChild(hpTitle);
+
+  if (report.today.highPriority.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'standup-empty';
+    empty.textContent = 'No high priority items';
+    hpSection.appendChild(empty);
+  } else {
+    const ul = document.createElement('ul');
+    ul.className = 'standup-list';
+    for (const item of report.today.highPriority) {
+      const li = document.createElement('li');
+      const priorityCls = item.priority.toLowerCase();
+      li.innerHTML = `<span class="standup-item-badge ${priorityCls}">${escHtml(item.priority)}</span>` +
+        `<span class="standup-item-desc">${descHtml(item.description, item.githubUrl)}</span>` +
+        `<span class="standup-item-id">${escHtml(item.status)}</span>`;
+      ul.appendChild(li);
+    }
+    hpSection.appendChild(ul);
+  }
+  tSection.appendChild(hpSection);
+
+  // Overdue
+  if (report.today.overdue.length > 0) {
+    const odSection = document.createElement('div');
+    odSection.className = 'standup-section';
+    const odTitle = document.createElement('div');
+    odTitle.className = 'standup-section-title';
+    odTitle.textContent = 'Overdue';
+    odSection.appendChild(odTitle);
+    const ul = document.createElement('ul');
+    ul.className = 'standup-list';
+    for (const item of report.today.overdue) {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="standup-item-id">${escHtml(item.id)}</span>` +
+        `<span class="standup-item-desc">${descHtml(item.description, item.githubUrl)}</span>` +
+        `<span class="standup-item-badge" style="color:var(--status-fail)">due ${escHtml(item.due)}</span>`;
+      ul.appendChild(li);
+    }
+    odSection.appendChild(ul);
+    tSection.appendChild(odSection);
+  }
+
+  // Due today
+  if (report.today.dueToday.length > 0) {
+    const dtSection = document.createElement('div');
+    dtSection.className = 'standup-section';
+    const dtTitle = document.createElement('div');
+    dtTitle.className = 'standup-section-title';
+    dtTitle.textContent = 'Due Today';
+    dtSection.appendChild(dtTitle);
+    const ul = document.createElement('ul');
+    ul.className = 'standup-list';
+    for (const item of report.today.dueToday) {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="standup-item-id">${escHtml(item.id)}</span>` +
+        `<span class="standup-item-desc">${descHtml(item.description, item.githubUrl)}</span>` +
+        `<span class="standup-item-badge">${escHtml(item.priority)}</span>`;
+      ul.appendChild(li);
+    }
+    dtSection.appendChild(ul);
+    tSection.appendChild(dtSection);
+  }
+
+  // Blocked
+  if (report.today.blocked.length > 0) {
+    const blSection = document.createElement('div');
+    blSection.className = 'standup-section';
+    const blTitle = document.createElement('div');
+    blTitle.className = 'standup-section-title';
+    blTitle.textContent = 'Blocked';
+    blSection.appendChild(blTitle);
+    const ul = document.createElement('ul');
+    ul.className = 'standup-list';
+    for (const item of report.today.blocked) {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="standup-item-id">${escHtml(item.id)}</span>` +
+        `<span class="standup-item-desc">${descHtml(item.description, item.githubUrl)}</span>`;
+      ul.appendChild(li);
+    }
+    blSection.appendChild(ul);
+    tSection.appendChild(blSection);
+  }
+
+  root.appendChild(tSection);
+  return root;
+}
+
+async function generateStandupWithClaude() {
+  const output = document.getElementById('standup-claude-output');
+  const spinner = document.getElementById('standup-claude-spinner');
+  const btn = document.getElementById('standup-claude-generate');
+
+  output.textContent = '';
+  output.classList.add('hidden');
+  output.classList.remove('claude-error');
+  spinner.classList.remove('hidden');
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/standup/claude', { method: 'POST' });
+    if (!res.ok) {
+      spinner.classList.add('hidden');
+      output.classList.remove('hidden');
+      output.classList.add('claude-error');
+      output.textContent = 'Error: ' + (await res.text());
+      btn.disabled = false;
+    }
+    // Output streams via WebSocket standup-status messages
+  } catch (err) {
+    spinner.classList.add('hidden');
+    output.classList.remove('hidden');
+    output.classList.add('claude-error');
+    output.textContent = 'Error: ' + err.message;
+    btn.disabled = false;
+  }
+}
+
+function handleStandupStatus(data) {
+  const output = document.getElementById('standup-claude-output');
+  const spinner = document.getElementById('standup-claude-spinner');
+  const spinnerLabel = document.getElementById('standup-claude-spinner-label');
+  const btn = document.getElementById('standup-claude-generate');
+
+  if (data.status === 'running') {
+    if (data.activity) {
+      const label = TOOL_LABELS[data.activity] || ('Using ' + data.activity);
+      spinnerLabel.textContent = label + '...';
+    }
+    if (data.output) {
+      output.classList.remove('hidden');
+      output.textContent += data.output;
+      output.scrollTop = output.scrollHeight;
+    }
+  } else if (data.status === 'done') {
+    spinner.classList.add('hidden');
+    btn.disabled = false;
+  } else if (data.status === 'error') {
+    spinner.classList.add('hidden');
+    output.classList.remove('hidden');
+    output.classList.add('claude-error');
+    output.textContent += (output.textContent ? '\n' : '') + 'Error: ' + data.output;
+    btn.disabled = false;
+  }
+}
+
 // Event listeners
 document.addEventListener('DOMContentLoaded', () => {
   connectWebSocket();
@@ -1157,6 +1457,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('log-dialog-close').onclick = closeLogDialog;
   document.getElementById('log-close-btn').onclick = closeLogDialog;
   document.getElementById('log-load-more').onclick = () => loadLogPage(false);
+
+  // Standup dialog
+  document.getElementById('show-standup').onclick = () => showStandupDialog();
+  document.getElementById('standup-dialog-close').onclick = closeStandupDialog;
+  document.getElementById('standup-close-btn').onclick = closeStandupDialog;
+  document.getElementById('standup-claude-generate').onclick = generateStandupWithClaude;
+  document.querySelectorAll('#standup-dialog .tab-btn').forEach(btn => {
+    btn.onclick = () => switchStandupTab(btn.dataset.tab);
+  });
 
   // Refresh/update all
   document.getElementById('refresh-all').onclick = refreshAll;
@@ -1231,6 +1540,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Escape to close panels/dialogs
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      const standupDialog = document.getElementById('standup-dialog');
+      if (!standupDialog.classList.contains('hidden')) {
+        closeStandupDialog();
+        return;
+      }
       const logDialog = document.getElementById('log-dialog');
       if (!logDialog.classList.contains('hidden')) {
         closeLogDialog();

@@ -18,6 +18,7 @@
         <span id="pending-count">0</span> pending
       </button>
       <span id="last-update" class="last-update"></span>
+      <button id="show-standup" class="btn-small">Standup</button>
       <a id="show-log" href="#" title="Update log">View Log</a>
       <div class="update-action">
         <button id="refresh-all" class="btn">Update All</button>
@@ -118,6 +119,32 @@
         <div class="dialog-buttons">
           <button id="log-load-more" class="btn-small hidden">Load more</button>
           <button id="log-close-btn" class="btn-small">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="standup-dialog" class="dialog-overlay hidden">
+    <div class="dialog dialog-wide">
+      <div class="dialog-header">
+        <h2>Daily Standup</h2>
+        <button id="standup-dialog-close" class="btn-icon">&times;</button>
+      </div>
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="report">Report</button>
+        <button class="tab-btn" data-tab="claude">Claude</button>
+      </div>
+      <div id="standup-tab-report" class="tab-content standup-content"></div>
+      <div id="standup-tab-claude" class="tab-content standup-content hidden">
+        <div class="standup-claude-actions">
+          <button id="standup-claude-generate" class="btn">Generate with Claude</button>
+          <div id="standup-claude-spinner" class="claude-spinner hidden"><span class="spinner"></span> <span id="standup-claude-spinner-label">Thinking...</span></div>
+        </div>
+        <pre id="standup-claude-output" class="standup-claude-output hidden"></pre>
+      </div>
+      <div class="dialog-actions">
+        <div class="dialog-buttons">
+          <button id="standup-close-btn" class="btn-small">Close</button>
         </div>
       </div>
     </div>

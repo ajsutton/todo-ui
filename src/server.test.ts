@@ -244,4 +244,38 @@ describe("server integration", () => {
     expect(todo1!.status).toBe("Open");
     expect(todo1!.doneDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
+
+  it("GET /api/standup returns standup report structure", async () => {
+    const res = await fetch(`http://localhost:${port}/api/standup`);
+    expect(res.status).toBe(200);
+    const body = await res.json() as {
+      date: string;
+      yesterdayDate: string;
+      yesterday: {
+        done: unknown[];
+        statusChanges: unknown[];
+        githubActivity: unknown[];
+      };
+      today: {
+        highPriority: unknown[];
+        overdue: unknown[];
+        dueToday: unknown[];
+        blocked: unknown[];
+      };
+    };
+
+    expect(body.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(body.yesterdayDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(Array.isArray(body.yesterday.done)).toBe(true);
+    expect(Array.isArray(body.yesterday.statusChanges)).toBe(true);
+    expect(Array.isArray(body.yesterday.githubActivity)).toBe(true);
+    expect(Array.isArray(body.today.highPriority)).toBe(true);
+    expect(Array.isArray(body.today.overdue)).toBe(true);
+    expect(Array.isArray(body.today.dueToday)).toBe(true);
+    expect(Array.isArray(body.today.blocked)).toBe(true);
+
+    // TODO-2 has due 2026-03-20 which is in the past (today is 2026-04-03 per test fixture)
+    const overdueIds = (body.today.overdue as Array<{ id: string }>).map((i) => i.id);
+    expect(overdueIds).toContain("TODO-2");
+  });
 });
