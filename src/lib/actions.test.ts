@@ -264,4 +264,141 @@ describe("buildStatusString", () => {
     });
     expect(result).toBe("Closed");
   });
+
+  it("returns Open, CI pending for pending checks", () => {
+    const result = buildStatusString({
+      state: "OPEN",
+      isDraft: false,
+      statusCheckRollup: "PENDING",
+      reviewDecision: "",
+      mergeable: "MERGEABLE",
+      isInMergeQueue: false,
+    });
+    expect(result).toBe("Open, CI pending");
+  });
+
+  it("returns Open with changes requested", () => {
+    const result = buildStatusString({
+      state: "OPEN",
+      isDraft: false,
+      statusCheckRollup: "SUCCESS",
+      reviewDecision: "CHANGES_REQUESTED",
+      mergeable: "MERGEABLE",
+      isInMergeQueue: false,
+    });
+    expect(result).toBe("Open, CI passing, changes requested");
+  });
+
+  it("treats ERROR same as FAILURE for CI status", () => {
+    const result = buildStatusString({
+      state: "OPEN",
+      isDraft: false,
+      statusCheckRollup: "ERROR",
+      reviewDecision: "",
+      mergeable: "",
+      isInMergeQueue: false,
+    });
+    expect(result).toBe("Open, CI failing");
+  });
+
+  it("returns Open with no CI info when statusCheckRollup is empty", () => {
+    const result = buildStatusString({
+      state: "OPEN",
+      isDraft: false,
+      statusCheckRollup: "",
+      reviewDecision: "",
+      mergeable: "",
+      isInMergeQueue: false,
+    });
+    expect(result).toBe("Open");
+  });
+
+  it("returns Draft, approved when draft PR has review approval", () => {
+    const result = buildStatusString({
+      state: "OPEN",
+      isDraft: true,
+      statusCheckRollup: "SUCCESS",
+      reviewDecision: "APPROVED",
+      mergeable: "MERGEABLE",
+      isInMergeQueue: false,
+    });
+    expect(result).toBe("Draft, CI passing, approved");
+  });
+});
+
+describe("markComplete / markIncomplete edge cases", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "todo-test-"));
+    writeFileSync(join(tmpDir, "TODO.md"), TODO_FIXTURE, "utf-8");
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("markComplete is idempotent (re-completing overwrites date)", () => {
+    markComplete(tmpDir, "TODO-1");
+    markComplete(tmpDir, "TODO-1");
+    const content = readFileSync(join(tmpDir, "TODO.md"), "utf-8");
+    const todo1Line = content.split("\n").find((l) => l.includes("TODO-1"))!;
+    const cells = todo1Line.split("|");
+    expect(cells[7]!.trim()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("markIncomplete is idempotent (clearing already-empty done)", () => {
+    expect(() => markIncomplete(tmpDir, "TODO-1")).not.toThrow();
+    const content = readFileSync(join(tmpDir, "TODO.md"), "utf-8");
+    const cells = content.split("\n").find((l) => l.includes("TODO-1"))!.split("|");
+    expect(cells[7]!.trim()).toBe("");
+  });
+
+  it("markIncomplete throws for unknown id", () => {
+    expect(() => markIncomplete(tmpDir, "TODO-999")).toThrow("TODO-999 not found");
+  });
+});
+
+describe("setPriority edge cases", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "todo-test-"));
+    writeFileSync(join(tmpDir, "TODO.md"), TODO_FIXTURE, "utf-8");
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("accepts all valid priorities P0-P5", () => {
+    for (const p of ["P0", "P1", "P2", "P3", "P4", "P5"]) {
+      expect(() => setPriority(tmpDir, "TODO-1", p)).not.toThrow();
+    }
+  });
+
+  it("throws for unknown item id", () => {
+    expect(() => setPriority(tmpDir, "TODO-999", "P1")).toThrow("TODO-999 not found");
+  });
+});
+
+describe("setDue edge cases", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "todo-test-"));
+    writeFileSync(join(tmpDir, "TODO.md"), TODO_FIXTURE, "utf-8");
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("throws for unknown item id", () => {
+    expect(() => setDue(tmpDir, "TODO-999", "2026-05-01")).toThrow("TODO-999 not found");
+  });
+
+  it("rejects partial date like 2026-3-1", () => {
+    expect(() => setDue(tmpDir, "TODO-1", "2026-3-1")).toThrow("Invalid date");
+  });
 });
