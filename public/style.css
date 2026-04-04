@@ -3019,3 +3019,16 @@ body.has-p0::before {
   background-size: 200px 100%;
   animation: skeleton-shimmer 1.4s infinite linear;
 }
+
+/* Search term highlighting */
+mark.search-highlight {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  font-weight: 600;
+}
+
+[data-theme="dark"] mark.search-highlight {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
