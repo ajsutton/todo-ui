@@ -37,15 +37,31 @@ export function refreshStale() {
   staleIds = updateStaleTracker(appState.items);
 }
 
+function updateSearchBadge(shown, total) {
+  let badge = document.getElementById('search-count');
+  const searchEl = document.getElementById('filter-search');
+  if (!searchEl) return;
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.id = 'search-count';
+    badge.className = 'search-count';
+    searchEl.parentElement?.insertBefore(badge, searchEl.nextSibling);
+  }
+  const isFiltered = shown < total || appState.filterType || appState.filterStatus !== 'active' || appState.searchQuery;
+  badge.textContent = isFiltered ? `${shown} / ${total}` : '';
+  badge.classList.toggle('hidden', !isFiltered || (shown === total && !appState.searchQuery && !appState.filterType));
+}
+
 export function renderTable() {
-  let items = [...appState.items];
-  items = filterItems(items, {
+  const allItems = [...appState.items];
+  let items = filterItems(allItems, {
     filterType: appState.filterType,
     filterStatus: appState.filterStatus,
     searchQuery: appState.searchQuery,
   });
   items = sortItems(items, appState.sortColumn, appState.sortDirection);
 
+  updateSearchBadge(items.length, allItems.length);
   renderStats();
 
   const tbody = document.getElementById('todo-body');
