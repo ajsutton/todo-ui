@@ -1,11 +1,11 @@
-// Group-by mode: renders the table with collapsible priority sections
-// instead of a flat sorted list.
+// Group-by mode: renders the table with collapsible sections
+// Cycles: off → by priority → by type → off
 
 import { appState } from './state.js';
 
 const STORAGE_KEY = 'todo-groupby-collapsed';
 
-// Which priority groups are collapsed: Set<string> — lazily loaded on first use
+// Which groups are collapsed: Set<string> — lazily loaded on first use
 let _collapsed = null;
 function getCollapsed() {
   if (_collapsed === null) {
@@ -22,12 +22,30 @@ function saveCollapsed() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify([...getCollapsed()]));
 }
 
+// groupByMode: false | 'priority' | 'type'
 export function isGroupByMode() {
-  return appState.groupByMode === true;
+  return !!appState.groupByMode;
+}
+
+export function getGroupByField() {
+  return appState.groupByMode || null;
 }
 
 export function toggleGroupBy() {
-  appState.groupByMode = !appState.groupByMode;
+  if (!appState.groupByMode) {
+    appState.groupByMode = 'priority';
+  } else if (appState.groupByMode === 'priority') {
+    appState.groupByMode = 'type';
+  } else {
+    appState.groupByMode = false;
+  }
+  // Update button label
+  const btn = document.getElementById('groupby-toggle');
+  if (btn) {
+    if (!appState.groupByMode) btn.textContent = 'Group';
+    else if (appState.groupByMode === 'priority') btn.textContent = 'Group: P';
+    else btn.textContent = 'Group: T';
+  }
 }
 
 export function isGroupCollapsed(group) {
@@ -52,14 +70,31 @@ const PRIORITY_META = {
 };
 const PRIORITY_ORDER = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5'];
 
+const TYPE_META = {
+  Review:      { label: 'Reviews',      color: 'var(--accent)', emoji: '👀' },
+  PR:          { label: 'Pull Requests', color: 'var(--status-pass)', emoji: '🔀' },
+  Issue:       { label: 'Issues',        color: 'var(--p2)', emoji: '📋' },
+  Workstream:  { label: 'Workstreams',   color: 'var(--p3)', emoji: '🏗️' },
+};
+const TYPE_ORDER = ['Review', 'PR', 'Issue', 'Workstream'];
+
 export function groupItems(items) {
+  const field = getGroupByField() || 'priority';
   const groups = {};
   for (const item of items) {
-    const key = item.priority || 'P3';
+    const key = field === 'type' ? (item.type || 'Other') : (item.priority || 'P3');
     if (!groups[key]) groups[key] = [];
     groups[key].push(item);
   }
-  // Return in priority order, only non-empty
+  if (field === 'type') {
+    const knownKeys = TYPE_ORDER.filter(t => groups[t]?.length);
+    const otherKeys = Object.keys(groups).filter(k => !TYPE_ORDER.includes(k) && groups[k].length);
+    return [...knownKeys, ...otherKeys].map(t => ({
+      key: t,
+      meta: TYPE_META[t] || { label: t, color: 'var(--muted)', emoji: '' },
+      items: groups[t],
+    }));
+  }
   return PRIORITY_ORDER
     .filter(p => groups[p]?.length)
     .map(p => ({ key: p, meta: PRIORITY_META[p] || { label: p, color: 'var(--muted)', emoji: '' }, items: groups[p] }));
