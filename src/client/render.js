@@ -17,6 +17,7 @@ import { getSnoozedIds } from './snooze.js';
 import { pushUndo } from './undo.js';
 import { showContextMenu } from './contextmenu.js';
 import { applyDensity } from './density.js';
+import { applyColumnVisibility } from './columns.js';
 import { hasNote, getNote, showNoteEditor } from './notes.js';
 
 // Stale IDs maintained across renders
@@ -124,6 +125,7 @@ function renderSkeletonTable() {
 export function renderTable() {
   if (!appState.dataLoaded) { renderSkeletonTable(); return; }
   applyDensity();
+  // Column visibility applied at end of render via applyColumnVisibility()
   const allItems = [...appState.items];
   const snoozed = getSnoozedIds();
   let items = filterItems(allItems, {
@@ -186,6 +188,9 @@ export function renderTable() {
   } else {
     for (const item of items) appendItem(item);
   }
+
+  // Apply column visibility after rendering rows
+  applyColumnVisibility();
 }
 
 export function buildItemRow(item, { hasSubItems, isExpanded }) {

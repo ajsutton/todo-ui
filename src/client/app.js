@@ -13,6 +13,7 @@ import { initTheme, toggleTheme, initAccentPicker, showAccentPicker } from './th
 import { initSessionBadge } from './session.js';
 import { initStreakBadge } from './streak.js';
 import { initDensity } from './density.js';
+import { applyColumnVisibility, showColumnPicker } from './columns.js';
 import { requestNotificationPermission, canNotify } from './notifications.js';
 import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar, showBulkTagPicker } from './bulk.js';
 import { showSuggestionBanner } from './suggestion.js';
@@ -185,6 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initAccentPicker();
   initDensity();
+  applyColumnVisibility();
   initSessionBadge();
   initStreakBadge();
 
@@ -478,6 +480,9 @@ document.addEventListener('DOMContentLoaded', () => {
       renderTable();
     });
   }
+
+  // Column visibility
+  document.getElementById('columns-btn')?.addEventListener('click', (e) => showColumnPicker(e.currentTarget));
 
   // Bulk mode
   document.getElementById('bulk-mode-toggle')?.addEventListener('click', toggleBulkMode);
