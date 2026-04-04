@@ -86,8 +86,8 @@ export function renderTable() {
     filterStatus: appState.filterStatus,
     searchQuery: appState.searchQuery,
   });
-  // Hide snoozed items (unless explicitly showing done/all)
-  if (appState.filterStatus !== 'done' && snoozed.size > 0) {
+  // Hide snoozed items (unless explicitly showing done/all or _showSnoozed toggled)
+  if (appState.filterStatus !== 'done' && snoozed.size > 0 && !appState._showSnoozed) {
     items = items.filter(i => !snoozed.has(i.id));
   }
   items = sortItems(items, appState.sortColumn, appState.sortDirection, appState.sortKeys);
@@ -484,6 +484,7 @@ export function renderStats() {
   const alerts = [];
   if (blocked.length > 0) alerts.push(`<span class="stat-alert stat-blocked" data-filter-key="search" data-filter-val="blocked" role="button">${blocked.length} blocked</span>`);
   if (overdue.length > 0) alerts.push(`<span class="stat-alert stat-overdue" data-filter-key="search" data-filter-val="overdue" role="button">${overdue.length} overdue</span>`);
+  if (snoozed.size > 0) alerts.push(`<span class="stat-alert stat-snoozed" id="snooze-stats-btn" role="button" title="Click to show snoozed items">💤 ${snoozed.size} snoozed</span>`);
   alerts.push(`<span class="stat-alert stat-done">${doneThisWeek.length} done this week</span>`);
   alerts.push(`<span class="stat-alert-muted">${donePercent}% complete</span>`);
   if (sparkSvg) alerts.push(`<span class="stat-sparkline" title="Active item count over time (last ${history.length} snapshots)">${sparkSvg}</span>`);
@@ -524,6 +525,17 @@ export function renderStats() {
       }
     };
   });
+
+  // Snooze stats badge — clicking shows all items including snoozed temporarily
+  const snoozeBtn = document.getElementById('snooze-stats-btn');
+  if (snoozeBtn) {
+    snoozeBtn.style.cursor = 'pointer';
+    snoozeBtn.onclick = () => {
+      // Show snoozed items by momentarily clearing the snooze filter
+      appState._showSnoozed = !appState._showSnoozed;
+      renderTable();
+    };
+  }
 }
 
 export function setLastUpdate(isoString) {

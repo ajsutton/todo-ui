@@ -263,6 +263,7 @@ select:focus {
 .stat-alert.stat-blocked { color: var(--p0); }
 .stat-alert.stat-overdue { color: var(--status-fail); }
 .stat-alert.stat-done { color: var(--status-pass); }
+.stat-alert.stat-snoozed { color: var(--muted); }
 
 .stat-alert-muted {
   font-size: 0.8rem;
