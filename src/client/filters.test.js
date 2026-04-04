@@ -342,6 +342,36 @@ describe('sortItems multi-sort', () => {
   });
 });
 
+// ---- sortItems urgency ----
+
+describe('sortItems urgency sort', () => {
+  const urgencyFn = (item) => ({ 'TODO-1': 90, 'TODO-2': 50, 'TODO-3': 70 }[item.id] ?? 0);
+  const items = [
+    makeItem({ id: 'TODO-1', priority: 'P0' }),
+    makeItem({ id: 'TODO-2', priority: 'P2' }),
+    makeItem({ id: 'TODO-3', priority: 'P1' }),
+  ];
+
+  it('sorts by urgency descending', () => {
+    const res = sortItems([...items], 'urgency', 'desc', null, urgencyFn);
+    expect(res[0].id).toBe('TODO-1'); // score 90
+    expect(res[1].id).toBe('TODO-3'); // score 70
+    expect(res[2].id).toBe('TODO-2'); // score 50
+  });
+
+  it('sorts by urgency ascending', () => {
+    const res = sortItems([...items], 'urgency', 'asc', null, urgencyFn);
+    expect(res[0].id).toBe('TODO-2'); // score 50
+    expect(res[2].id).toBe('TODO-1'); // score 90
+  });
+
+  it('returns 0 for urgency when no urgencyFn provided', () => {
+    const res = sortItems([...items], 'urgency', 'desc');
+    // All scores are 0 so order is stable-ish — just check no error
+    expect(res.length).toBe(3);
+  });
+});
+
 // ---- filterSubItem ----
 
 describe('filterSubItem', () => {

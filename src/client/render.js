@@ -93,7 +93,7 @@ export function renderTable() {
   if (appState.filterStatus !== 'done' && snoozed.size > 0 && !appState._showSnoozed) {
     items = items.filter(i => !snoozed.has(i.id));
   }
-  items = sortItems(items, appState.sortColumn, appState.sortDirection, appState.sortKeys);
+  items = sortItems(items, appState.sortColumn, appState.sortDirection, appState.sortKeys, computeUrgency);
   items = sortWithPinned(items);
 
   updateSearchBadge(items.length, allItems.length);
@@ -273,6 +273,27 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
     showDatePicker(tdDue, item);
   };
   tr.appendChild(tdDue);
+
+  // Urgency score cell
+  const tdUrgency = document.createElement('td');
+  tdUrgency.className = 'urgency-cell';
+  if (!isDone && !item.blocked) {
+    const score = computeUrgency(item);
+    const bar = document.createElement('div');
+    bar.className = 'urgency-bar-wrap';
+    bar.title = `Urgency: ${score}/100`;
+    const fill = document.createElement('div');
+    fill.className = 'urgency-bar-fill';
+    fill.style.width = score + '%';
+    fill.style.background = urgencyColor(score);
+    const label = document.createElement('span');
+    label.className = 'urgency-bar-label';
+    label.textContent = score;
+    bar.appendChild(fill);
+    bar.appendChild(label);
+    tdUrgency.appendChild(bar);
+  }
+  tr.appendChild(tdUrgency);
 
   // Actions cell
   const tdActions = document.createElement('td');
