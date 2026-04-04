@@ -15,6 +15,7 @@ import { sortWithPinned, togglePin, isPinned } from './pinned.js';
 import { renderTagPills, showTagPicker, getTagsForItem } from './tags.js';
 import { getSnoozedIds } from './snooze.js';
 import { pushUndo } from './undo.js';
+import { showContextMenu } from './contextmenu.js';
 
 // Stale IDs maintained across renders
 let staleIds = new Set();
@@ -201,6 +202,7 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
     const showDetail = await getShowDetail();
     showDetail(item.id);
   };
+  tr.oncontextmenu = (e) => showContextMenu(e, item, tr);
 
   // Checkbox cell (bulk mode only)
   if (isSelectionMode()) {
