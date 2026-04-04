@@ -3032,3 +3032,19 @@ mark.search-highlight {
 [data-theme="dark"] mark.search-highlight {
   background: color-mix(in srgb, var(--accent) 35%, transparent);
 }
+
+/* Row entry animation for newly appearing items */
+@keyframes row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.row-enter {
+  animation: row-enter 0.25s ease-out both;
+}
