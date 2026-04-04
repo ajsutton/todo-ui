@@ -431,6 +431,10 @@ export function renderStats() {
 
   const p0Count = priCounts['P0'] || 0;
   const p1Count = priCounts['P1'] || 0;
+
+  // Ambient urgency: pulse page border when P0s are active
+  document.body.classList.toggle('has-p0', p0Count > 0);
+
   const history = recordSnapshot(active.length, p0Count, p1Count);
   const sparkSvg = renderSparkline(history, 60, 16);
 
