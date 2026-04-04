@@ -99,6 +99,7 @@
         <span id="detail-id" class="detail-id"></span>
       </div>
       <div class="detail-header-actions">
+        <button id="detail-note" class="btn-small hidden" title="Append a quick note">+ Note</button>
         <button id="detail-edit" class="btn-small hidden">Edit</button>
         <button id="detail-save" class="btn-small hidden">Save</button>
         <button id="detail-cancel" class="btn-small btn-secondary hidden">Cancel</button>
@@ -106,6 +107,13 @@
       </div>
     </div>
     <div id="detail-content"></div>
+    <div id="detail-note-form" class="detail-note-form hidden">
+      <textarea id="detail-note-text" class="detail-note-textarea" placeholder="Add a note (Ctrl+Enter to save, Esc to cancel)…" rows="3"></textarea>
+      <div class="detail-note-actions">
+        <button id="detail-note-save" class="btn-small">Append note</button>
+        <button id="detail-note-cancel" class="btn-small btn-secondary">Cancel</button>
+      </div>
+    </div>
   </div>
 
   <div id="update-dialog" class="dialog-overlay hidden">
