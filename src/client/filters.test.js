@@ -249,6 +249,36 @@ describe('sortItems', () => {
   });
 });
 
+// ---- sortItems multi-sort ----
+
+describe('sortItems multi-sort', () => {
+  const items = [
+    makeItem({ id: 'TODO-1', priority: 'P1', due: '2024-02-01' }),
+    makeItem({ id: 'TODO-2', priority: 'P1', due: '2024-01-01' }),
+    makeItem({ id: 'TODO-3', priority: 'P0', due: '2024-03-01' }),
+  ];
+
+  it('sorts by multiple keys', () => {
+    const res = sortItems([...items], 'priority', 'asc', [
+      { col: 'priority', dir: 'asc' },
+      { col: 'due', dir: 'asc' },
+    ]);
+    expect(res[0].id).toBe('TODO-3'); // P0 first
+    expect(res[1].id).toBe('TODO-2'); // P1 + earlier due
+    expect(res[2].id).toBe('TODO-1'); // P1 + later due
+  });
+
+  it('falls back to primary sort when no sortKeys provided', () => {
+    const res = sortItems([...items], 'priority', 'asc');
+    expect(res[0].priority).toBe('P0');
+  });
+
+  it('uses sortKeys over primary sort when provided', () => {
+    const res = sortItems([...items], 'priority', 'desc', [{ col: 'due', dir: 'asc' }]);
+    expect(res[0].due).toBe('2024-01-01');
+  });
+});
+
 // ---- filterSubItem ----
 
 describe('filterSubItem', () => {

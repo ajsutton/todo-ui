@@ -183,37 +183,70 @@ document.addEventListener('DOMContentLoaded', () => {
   connectWebSocket();
   fetchLastUpdateTime();
 
-  // Sort headers
-  document.querySelectorAll('th[data-sort]').forEach(th => {
-    th.onclick = () => {
-      const col = th.dataset.sort;
-      if (appState.sortColumn === col) {
-        appState.sortDirection = appState.sortDirection === 'asc' ? 'desc' : 'asc';
-      } else {
-        appState.sortColumn = col;
-        appState.sortDirection = 'asc';
-      }
-      document.querySelectorAll('th[data-sort]').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
-      th.classList.add(appState.sortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
-      renderTable();
-    };
-  });
+  // Sort headers — Shift+click adds secondary sort key
+  function updateSortIndicators() {
+    document.querySelectorAll('th[data-sort]').forEach(h => {
+      h.classList.remove('sort-asc', 'sort-desc', 'sort-secondary');
+      h.removeAttribute('data-sort-index');
+    });
+    if (appState.sortKeys.length > 0) {
+      appState.sortKeys.forEach((key, i) => {
+        const h = document.querySelector(`th[data-sort="${key.col}"]`);
+        if (h) {
+          h.classList.add(key.dir === 'asc' ? 'sort-asc' : 'sort-desc');
+          if (i > 0) h.classList.add('sort-secondary');
+          h.dataset.sortIndex = i + 1;
+        }
+      });
+    } else {
+      const h = document.querySelector(`th[data-sort="${appState.sortColumn}"]`);
+      if (h) h.classList.add(appState.sortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
+    }
+  }
 
-  // Set initial sort indicator
-  const initialTh = document.querySelector('th[data-sort="priority"]');
-  if (initialTh) initialTh.classList.add('sort-asc');
+  document.querySelectorAll('th[data-sort]').forEach(th => {
+    th.addEventListener('click', (e) => {
+      const col = th.dataset.sort;
+      if (e.shiftKey) {
+        // Add/toggle secondary sort key
+        const existing = appState.sortKeys.findIndex(k => k.col === col);
+        if (existing === 0) {
+          // Toggle primary direction
+          appState.sortKeys[0].dir = appState.sortKeys[0].dir === 'asc' ? 'desc' : 'asc';
+        } else if (existing > 0) {
+          // Toggle or remove secondary key
+          appState.sortKeys[existing].dir = appState.sortKeys[existing].dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          // Add as new secondary key
+          if (appState.sortKeys.length === 0) {
+            // Promote current sort to keys array first
+            appState.sortKeys = [{ col: appState.sortColumn, dir: appState.sortDirection }];
+          }
+          appState.sortKeys.push({ col, dir: 'asc' });
+        }
+      } else {
+        // Normal click: clear multi-sort, do primary sort
+        appState.sortKeys = [];
+        if (appState.sortColumn === col) {
+          appState.sortDirection = appState.sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          appState.sortColumn = col;
+          appState.sortDirection = 'asc';
+        }
+      }
+      updateSortIndicators();
+      syncUrl();
+      renderTable();
+    });
+  });
 
   // Restore filter dropdowns from URL state
   document.getElementById('filter-search').value = appState.searchQuery;
   document.getElementById('filter-type').value = appState.filterType;
   document.getElementById('filter-status').value = appState.filterStatus;
 
-  // Restore sort indicator from URL state
-  if (appState.sortColumn !== 'priority' || appState.sortDirection !== 'asc') {
-    if (initialTh) initialTh.classList.remove('sort-asc');
-    const restored = document.querySelector(`th[data-sort="${appState.sortColumn}"]`);
-    if (restored) restored.classList.add(appState.sortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
-  }
+  // Set initial sort indicator
+  updateSortIndicators();
 
   // Restore detail panel from URL state
   if (appState.urlParams.detailId) {
