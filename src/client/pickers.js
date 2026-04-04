@@ -1,5 +1,6 @@
 // Inline pickers: priority picker, date picker
 import { updatePriority, updateSubPriority, updateDue } from './actions.js';
+import { pushUndo } from './undo.js';
 
 export function showPriorityPicker(cell, item) {
   document.querySelectorAll('.priority-picker').forEach(el => el.remove());
@@ -15,7 +16,11 @@ export function showPriorityPicker(cell, item) {
     btn.onclick = (e) => {
       e.stopPropagation();
       picker.remove();
-      if (p !== item.priority) updatePriority(item.id, p);
+      if (p !== item.priority) {
+        const oldPriority = item.priority;
+        updatePriority(item.id, p);
+        pushUndo(`Priority changed to ${p}`, () => updatePriority(item.id, oldPriority));
+      }
     };
     picker.appendChild(btn);
   }
