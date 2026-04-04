@@ -3274,6 +3274,30 @@ mark.search-highlight {
   margin: 3px 8px;
 }
 
+/* Table row density modes */
+#todo-table.density-compact td,
+#todo-table.density-compact th {
+  padding-top: 3px;
+  padding-bottom: 3px;
+  font-size: 12px;
+}
+#todo-table.density-compact tr { height: 28px; }
+
+#todo-table.density-comfortable td,
+#todo-table.density-comfortable th {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  font-size: 13px;
+}
+
+#todo-table.density-spacious td,
+#todo-table.density-spacious th {
+  padding-top: 11px;
+  padding-bottom: 11px;
+  font-size: 13px;
+}
+#todo-table.density-spacious tr { border-bottom: 1px solid var(--border); }
+
 /* Changelog / "what changed since last visit" banner */
 .changelog-banner {
   display: flex;
