@@ -2919,3 +2919,29 @@ body.has-p0::before {
   outline: none;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
 }
+
+/* Top progress bar */
+.progress-bar-track {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: transparent;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1), background 0.6s ease;
+  pointer-events: auto;
+  cursor: default;
+}
+
+@media print {
+  .progress-bar-track { display: none; }
+}
