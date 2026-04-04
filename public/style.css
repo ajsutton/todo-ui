@@ -2263,6 +2263,36 @@ tbody tr {
 }
 .copy-toast-visible { opacity: 1; transform: translateY(0); }
 
+/* Detail panel note form */
+.detail-note-form {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg));
+  animation: slide-down 0.15s ease;
+}
+.detail-note-form.hidden { display: none; }
+
+.detail-note-textarea {
+  width: 100%;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--fg);
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+.detail-note-textarea:focus { border-color: var(--accent); }
+
+.detail-note-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
 /* Week view overlay */
 .week-view-overlay {
   position: fixed;

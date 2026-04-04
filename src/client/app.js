@@ -4,7 +4,7 @@ import { syncUrl } from './url.js';
 import { renderTable, fetchLastUpdateTime, setLastUpdate } from './render.js';
 import { connectWebSocket } from './ws.js';
 import { showDetail } from './detail.js';
-import { enterDetailEditMode, exitDetailEditMode, saveDetailContent } from './detail.js';
+import { enterDetailEditMode, exitDetailEditMode, saveDetailContent, toggleNoteForm, appendNote } from './detail.js';
 import { showLogDialog, closeLogDialog, loadLogPage } from './log.js';
 import { showStandupDialog, closeStandupDialog, switchStandupTab, copyStandupReport, generateStandupWithClaude } from './standup.js';
 import { sendClaudePrompt, handleClaudeStatus, pushHistory, resetHistoryNav, navigateHistory } from './claude.js';
@@ -305,6 +305,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('detail-edit').onclick = () => enterDetailEditMode();
   document.getElementById('detail-save').onclick = () => saveDetailContent();
   document.getElementById('detail-cancel').onclick = () => exitDetailEditMode(true);
+  document.getElementById('detail-note')?.addEventListener('click', toggleNoteForm);
+  document.getElementById('detail-note-save')?.addEventListener('click', appendNote);
+  document.getElementById('detail-note-cancel')?.addEventListener('click', toggleNoteForm);
+  document.getElementById('detail-note-text')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); appendNote(); }
+    if (e.key === 'Escape') toggleNoteForm();
+  });
   document.getElementById('detail-close').onclick = () => {
     if (appState.detailEditMode) exitDetailEditMode(false);
     document.getElementById('detail-panel').classList.remove('visible');

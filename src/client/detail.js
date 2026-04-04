@@ -57,6 +57,9 @@ export async function showDetail(id) {
   appState.currentDetailRaw = null;
   appState.currentDetailHtml = null;
   document.getElementById('detail-edit').classList.add('hidden');
+  document.getElementById('detail-note')?.classList.add('hidden');
+  const noteFormEl = document.getElementById('detail-note-form');
+  if (noteFormEl) noteFormEl.classList.add('hidden');
 
   const item = appState.items.find(i => i.id === id);
   const desc = item ? item.description.replace(/^\[.*?\]\(.*?\)\s*/, '') : id;
@@ -82,6 +85,7 @@ export async function showDetail(id) {
       content.innerHTML = '';
     }
     document.getElementById('detail-edit').classList.remove('hidden');
+    document.getElementById('detail-note')?.classList.remove('hidden');
   } catch {
     content.innerHTML = '<p>Error loading details.</p>';
   }
@@ -123,6 +127,60 @@ export function exitDetailEditMode(restoreContent) {
   }
   if (restoreContent && appState.currentDetailHtml) {
     document.getElementById('detail-content').innerHTML = appState.currentDetailHtml;
+  }
+}
+
+export function toggleNoteForm() {
+  const noteForm = document.getElementById('detail-note-form');
+  const noteBtn = document.getElementById('detail-note');
+  if (!noteForm) return;
+  const isHidden = noteForm.classList.toggle('hidden');
+  if (!isHidden) {
+    document.getElementById('detail-note-text')?.focus();
+    if (noteBtn) noteBtn.textContent = 'Cancel note';
+  } else {
+    if (noteBtn) noteBtn.textContent = '+ Note';
+    const noteText = document.getElementById('detail-note-text');
+    if (noteText) noteText.value = '';
+  }
+}
+
+export async function appendNote() {
+  const id = document.getElementById('detail-id').textContent;
+  if (!id) return;
+  const noteText = document.getElementById('detail-note-text');
+  const text = noteText?.value.trim();
+  if (!text) return;
+
+  const saveBtn = document.getElementById('detail-note-save');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+
+  const timestamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  const noteMarkdown = appState.currentDetailRaw
+    ? `${appState.currentDetailRaw}\n\n---\n**Note** (${timestamp}): ${text}`
+    : `**Note** (${timestamp}): ${text}`;
+
+  try {
+    const res = await fetch('/api/detail/' + id, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markdown: noteMarkdown }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Save failed');
+    }
+    appState.currentDetailRaw = noteMarkdown;
+    if (noteText) noteText.value = '';
+    const noteForm = document.getElementById('detail-note-form');
+    if (noteForm) noteForm.classList.add('hidden');
+    const noteBtn = document.getElementById('detail-note');
+    if (noteBtn) noteBtn.textContent = '+ Note';
+    showDetail(id);
+  } catch (err) {
+    console.error('Failed to append note:', err);
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Append note'; }
   }
 }
 
