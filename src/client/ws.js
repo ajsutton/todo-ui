@@ -1,6 +1,6 @@
 // WebSocket connection management
 import { appState } from './state.js';
-import { renderTable, prefetchSubItems, showAutoAddedNotice } from './render.js';
+import { renderTable, prefetchSubItems, showAutoAddedNotice, refreshStale } from './render.js';
 import { refreshOpenDetail } from './detail.js';
 import { handleClaudeStatus } from './claude.js';
 import { handleStandupStatus, displayStandupClaudeReport } from './standup.js';
@@ -44,6 +44,7 @@ export function connectWebSocket() {
       appState.items = msg.data.items;
       appState.rawMarkdown = msg.data.rawMarkdown;
       appState.lastModified = msg.data.lastModified;
+      refreshStale();
       renderTable();
       prefetchSubItems();
       refreshOpenDetail();

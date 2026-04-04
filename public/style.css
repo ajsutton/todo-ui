@@ -1472,3 +1472,17 @@ td.editable:hover {
   --input-border: #d1d5db;
   --shadow: rgba(0, 0, 0, 0.1);
 }
+
+/* Stale item indicator — unchanged status/priority for >7 days */
+.row-stale td:first-child::after {
+  content: "·";
+  color: var(--muted);
+  font-size: 1.4em;
+  margin-left: 4px;
+  vertical-align: middle;
+  opacity: 0.6;
+}
+
+.row-stale {
+  opacity: 0.85;
+}
