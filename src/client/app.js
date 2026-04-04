@@ -22,6 +22,7 @@ import { renderPresetsBar, showSavePresetDialog } from './presets.js';
 import { initSearchHistory, recordSearch, hideDropdown } from './searchhistory.js';
 import { initNewItem } from './newitem.js';
 import { showWeekView } from './weekview.js';
+import { showDigest } from './digest.js';
 
 function showUpdateDialog(results, discovered, errors) {
   errors = errors || [];
@@ -413,6 +414,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Week view
   document.getElementById('show-week')?.addEventListener('click', showWeekView);
+
+  // Daily brief digest
+  document.getElementById('show-digest')?.addEventListener('click', showDigest);
 
   // Saved filter presets
   renderPresetsBar();
