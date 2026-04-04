@@ -1,6 +1,35 @@
 // Pomodoro-style focus timer — attach to any item, shows countdown in header
 import { canNotify } from './notifications.js';
 
+// Time tracking: store completed sessions per item in localStorage
+const TIME_KEY = 'todo-time-tracked';
+
+function loadTimeData() {
+  try { return JSON.parse(localStorage.getItem(TIME_KEY) || '{}'); } catch { return {}; }
+}
+
+function recordTimerSession(itemId, minutes) {
+  const data = loadTimeData();
+  if (!data[itemId]) data[itemId] = { totalMinutes: 0, sessions: [] };
+  data[itemId].totalMinutes += minutes;
+  data[itemId].sessions.push({ date: new Date().toISOString().slice(0, 10), minutes });
+  // Keep only last 50 sessions per item
+  if (data[itemId].sessions.length > 50) data[itemId].sessions = data[itemId].sessions.slice(-50);
+  localStorage.setItem(TIME_KEY, JSON.stringify(data));
+}
+
+export function getTimeTracked(itemId) {
+  const data = loadTimeData();
+  return data[itemId]?.totalMinutes ?? 0;
+}
+
+export function formatMinutes(mins) {
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
 const DURATIONS = [
   { label: '5m',  minutes: 5 },
   { label: '15m', minutes: 15 },
@@ -40,11 +69,11 @@ function tick() {
   if (remaining <= 0) {
     // Timer done
     clearInterval(timerState.intervalId);
-    const label = timerState.itemLabel;
+    const { itemId, itemLabel, totalMs } = timerState;
     timerState = null;
     bar.classList.add('hidden');
     bar.classList.remove('timer-urgent');
-    onTimerComplete(label);
+    onTimerComplete(itemId, itemLabel, Math.round(totalMs / 60000));
     return;
   }
   const totalMs = timerState.totalMs;
@@ -57,7 +86,8 @@ function tick() {
   bar.classList.toggle('timer-urgent', remaining < 60000);
 }
 
-function onTimerComplete(label) {
+function onTimerComplete(itemId, label, minutes) {
+  recordTimerSession(itemId, minutes);
   if (canNotify()) {
     new Notification('Focus timer complete!', {
       body: `Time's up for: ${label}`,
