@@ -1108,6 +1108,7 @@ function closeLogDialog() {
 
 // Standup dialog
 let activeStandupTab = 'report';
+let currentStandupReport = null;
 
 async function showStandupDialog() {
   const dialog = document.getElementById('standup-dialog');
@@ -1136,10 +1137,123 @@ async function loadStandupReport() {
     const res = await fetch('/api/standup');
     if (!res.ok) throw new Error(await res.text());
     const report = await res.json();
+    currentStandupReport = report;
     content.innerHTML = '';
     content.appendChild(renderStandupReport(report));
   } catch (err) {
+    currentStandupReport = null;
     content.innerHTML = '<p style="padding:16px;color:var(--status-fail)">Error loading report: ' + err.message + '</p>';
+  }
+}
+
+function formatReportAsMarkdown(report) {
+  const lines = [];
+
+  lines.push(`*Yesterday (${report.yesterdayDate})*`);
+
+  if (report.yesterday.done.length > 0) {
+    lines.push('');
+    lines.push('*Completed*');
+    for (const item of report.yesterday.done) {
+      lines.push(`• ${item.id}: ${descText(item.description)}`);
+    }
+  }
+
+  if (report.yesterday.statusChanges.length > 0) {
+    lines.push('');
+    lines.push('*Status Changes*');
+    for (const c of report.yesterday.statusChanges) {
+      lines.push(`• ${c.id}: ${descText(c.description)} (${c.oldStatus} → ${c.newStatus})`);
+    }
+  }
+
+  if (report.yesterday.githubActivity.length > 0) {
+    lines.push('');
+    lines.push('*GitHub Activity*');
+    for (const a of report.yesterday.githubActivity) {
+      lines.push(`• ${a.action} ${a.repo}: ${a.title}`);
+    }
+  }
+
+  if (report.yesterday.done.length === 0 && report.yesterday.statusChanges.length === 0 && report.yesterday.githubActivity.length === 0) {
+    lines.push('');
+    lines.push('_Nothing recorded_');
+  }
+
+  lines.push('');
+  lines.push(`*Today (${report.date})*`);
+
+  if (report.today.highPriority.length > 0) {
+    lines.push('');
+    lines.push('*High Priority*');
+    for (const item of report.today.highPriority) {
+      lines.push(`• ${item.priority} ${item.id}: ${descText(item.description)} — ${item.status}`);
+    }
+  }
+
+  if (report.today.overdue.length > 0) {
+    lines.push('');
+    lines.push('*Overdue*');
+    for (const item of report.today.overdue) {
+      lines.push(`• ${item.id}: ${descText(item.description)} (due ${item.due})`);
+    }
+  }
+
+  if (report.today.dueToday.length > 0) {
+    lines.push('');
+    lines.push('*Due Today*');
+    for (const item of report.today.dueToday) {
+      lines.push(`• ${item.id}: ${descText(item.description)}`);
+    }
+  }
+
+  if (report.today.blocked.length > 0) {
+    lines.push('');
+    lines.push('*Blocked*');
+    for (const item of report.today.blocked) {
+      lines.push(`• ${item.id}: ${descText(item.description)}`);
+    }
+  }
+
+  if (report.today.highPriority.length === 0 && report.today.overdue.length === 0 && report.today.dueToday.length === 0 && report.today.blocked.length === 0) {
+    lines.push('');
+    lines.push('_Nothing high priority_');
+  }
+
+  return lines.join('\n');
+}
+
+async function copyStandupReport() {
+  const btn = document.getElementById('standup-copy-btn');
+  let text = '';
+
+  if (activeStandupTab === 'report') {
+    if (!currentStandupReport) return;
+    text = formatReportAsMarkdown(currentStandupReport);
+  } else {
+    const output = document.getElementById('standup-claude-output');
+    text = output.textContent || '';
+    if (!text.trim()) return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(text);
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  } catch {
+    // Fallback for environments without clipboard API
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
   }
 }
 
@@ -1462,6 +1576,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('show-standup').onclick = () => showStandupDialog();
   document.getElementById('standup-dialog-close').onclick = closeStandupDialog;
   document.getElementById('standup-close-btn').onclick = closeStandupDialog;
+  document.getElementById('standup-copy-btn').onclick = copyStandupReport;
   document.getElementById('standup-claude-generate').onclick = generateStandupWithClaude;
   document.querySelectorAll('#standup-dialog .tab-btn').forEach(btn => {
     btn.onclick = () => switchStandupTab(btn.dataset.tab);
