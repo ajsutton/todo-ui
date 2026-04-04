@@ -1623,3 +1623,19 @@ td.editable:hover {
   background: var(--accent);
   color: #fff;
 }
+
+/* Inline icon-style button (refresh ↻) */
+.btn-icon-inline {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--muted);
+  padding: 2px 6px;
+  font-size: 14px;
+  border-radius: 4px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.btn-icon-inline:hover {
+  color: var(--fg);
+  border-color: var(--border);
+  background: var(--bg-secondary);
+}

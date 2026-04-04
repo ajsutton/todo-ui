@@ -193,6 +193,30 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
     });
   };
   actionsWrap.appendChild(toggleBtn);
+
+  // Refresh button for items with a GitHub URL (PRs/Reviews)
+  if (item.githubUrl && !isDone) {
+    const refreshBtn = document.createElement('button');
+    refreshBtn.textContent = '↻';
+    refreshBtn.className = 'btn-small btn-icon-inline';
+    refreshBtn.title = 'Refresh PR status';
+    refreshBtn.onclick = async (e) => {
+      e.stopPropagation();
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = '…';
+      try {
+        const res = await fetch('/api/refresh/' + item.id, { method: 'POST' });
+        if (!res.ok) throw new Error(await res.text());
+      } catch (err) {
+        console.error('Refresh failed:', err);
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = '↻';
+      }
+    };
+    actionsWrap.appendChild(refreshBtn);
+  }
+
   tdActions.appendChild(actionsWrap);
   tr.appendChild(tdActions);
   return tr;
