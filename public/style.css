@@ -2397,6 +2397,12 @@ tbody tr {
 .recents-pri { font-size: 10px; font-weight: 700; flex-shrink: 0; width: 20px; }
 .recents-desc { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
 
+/* Pinned rows */
+.row-pinned { border-left: 2px solid var(--accent) !important; }
+.row-pinned td:first-child { padding-left: calc(8px - 2px); }
+.pin-btn { opacity: 0.3; transition: opacity 0.15s; font-size: 11px !important; }
+.pin-btn:hover, .pin-btn.pin-active { opacity: 1; }
+
 /* Activity heatmap in stats bar */
 .stat-heatmap { display: inline-flex; align-items: center; }
 .heatmap-svg { display: block; }

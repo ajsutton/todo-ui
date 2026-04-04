@@ -11,6 +11,7 @@ import { recordSnapshot, renderSparkline } from './history.js';
 import { renderTimerBtn, showTimerPicker, getTimerItemId } from './timer.js';
 import { isGroupByMode, groupItems, buildGroupHeaderRow, isGroupCollapsed } from './groupby.js';
 import { renderHeatmap } from './heatmap.js';
+import { sortWithPinned, togglePin, isPinned } from './pinned.js';
 import { getSnoozedIds } from './snooze.js';
 import { pushUndo } from './undo.js';
 
@@ -92,6 +93,7 @@ export function renderTable() {
     items = items.filter(i => !snoozed.has(i.id));
   }
   items = sortItems(items, appState.sortColumn, appState.sortDirection, appState.sortKeys);
+  items = sortWithPinned(items);
 
   updateSearchBadge(items.length, allItems.length);
   renderStats();
@@ -142,6 +144,7 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
   const isDone = !!item.doneDate;
   if (isDone) tr.classList.add('status-done');
   if (item.blocked) tr.classList.add('status-blocked');
+  if (isPinned(item.id)) tr.classList.add('row-pinned');
   if (!isDone && staleIds.has(item.id)) {
     const days = staleDays(item.id);
     tr.classList.add('row-stale');
@@ -294,6 +297,19 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
     };
     actionsWrap.appendChild(refreshBtn);
   }
+
+  // Pin button
+  const pinBtn = document.createElement('button');
+  const pinned = isPinned(item.id);
+  pinBtn.textContent = '📌';
+  pinBtn.className = 'btn-small btn-icon-inline pin-btn' + (pinned ? ' pin-active' : '');
+  pinBtn.title = pinned ? 'Unpin this item' : 'Pin to top';
+  pinBtn.onclick = (e) => {
+    e.stopPropagation();
+    togglePin(item.id);
+    import('./render.js').then(m => m.renderTable());
+  };
+  actionsWrap.appendChild(pinBtn);
 
   // Snooze button
   if (!isDone) {
