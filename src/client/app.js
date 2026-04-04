@@ -11,6 +11,7 @@ import { sendClaudePrompt, handleClaudeStatus, pushHistory, resetHistoryNav, nav
 import { initKeyboard, showShortcutOverlay, closeShortcutOverlay } from './keyboard.js';
 import { initTheme, toggleTheme } from './theme.js';
 import { requestNotificationPermission, canNotify } from './notifications.js';
+import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar } from './bulk.js';
 
 function showUpdateDialog(results, discovered, errors) {
   errors = errors || [];
@@ -295,6 +296,20 @@ document.addEventListener('DOMContentLoaded', () => {
       panel.classList.remove('visible');
       syncUrl();
     }
+  });
+
+  // Bulk mode
+  document.getElementById('bulk-mode-toggle')?.addEventListener('click', toggleBulkMode);
+  document.getElementById('bulk-mode-exit')?.addEventListener('click', toggleBulkMode);
+  document.querySelectorAll('[data-bulk-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.bulkAction;
+      if (action === 'done') bulkMarkDone();
+      else if (action === 'active') bulkMarkActive();
+      else if (action === 'priority') bulkSetPriority(btn.dataset.priority);
+      else if (action === 'clear') clearSelection();
+      renderBulkToolbar();
+    });
   });
 
   // Notification toggle

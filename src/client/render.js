@@ -5,6 +5,7 @@ import { typeLabel, priorityIcon, statusEmoji, TYPE_EMOJI } from './icons.js';
 import { filterItems, sortItems, filterSubItem } from './filters.js';
 import { showPriorityPicker, showSubPriorityPicker, showDatePicker } from './pickers.js';
 import { updateStaleTracker } from './stale.js';
+import { selection, isSelectionMode, toggleSelected } from './bulk.js';
 
 // Stale IDs maintained across renders
 let staleIds = new Set();
@@ -87,6 +88,18 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
     const showDetail = await getShowDetail();
     showDetail(item.id);
   };
+
+  // Checkbox cell (bulk mode only)
+  if (isSelectionMode()) {
+    const tdCheck = document.createElement('td');
+    tdCheck.className = 'check-cell';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = selection.has(item.id);
+    cb.onclick = (e) => { e.stopPropagation(); toggleSelected(item.id); cb.checked = selection.has(item.id); };
+    tdCheck.appendChild(cb);
+    tr.appendChild(tdCheck);
+  }
 
   // Type cell
   const tdType = document.createElement('td');
