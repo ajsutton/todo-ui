@@ -231,6 +231,28 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
       e.stopPropagation();
       toggleExpand(item.id);
     };
+
+    // Sub-item progress bar
+    const subs = appState.subItemCache.get(item.id) || [];
+    if (subs.length > 0) {
+      const done = subs.filter(s => {
+        const sl = (s.currentStatus || '').toLowerCase();
+        return sl.includes('merged') || sl.includes('closed');
+      }).length;
+      const pct = Math.round((done / subs.length) * 100);
+      const prog = document.createElement('span');
+      prog.className = 'sub-progress';
+      prog.title = `${done} / ${subs.length} sub-items done`;
+      const fill = document.createElement('span');
+      fill.className = 'sub-progress-fill';
+      fill.style.width = pct + '%';
+      const label = document.createElement('span');
+      label.className = 'sub-progress-label';
+      label.textContent = `${done}/${subs.length}`;
+      prog.appendChild(fill);
+      prog.appendChild(label);
+      tdDesc.appendChild(prog);
+    }
   }
   tdDesc.appendChild(toggle);
 
