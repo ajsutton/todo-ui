@@ -6,6 +6,7 @@ import { renderTable } from './render.js';
 import { syncUrl } from './url.js';
 import { showPriorityPicker } from './pickers.js';
 import { openNewItemForm, isFormOpen, closeNewItemForm } from './newitem.js';
+import { showWeekView, closeWeekView, isWeekViewOpen } from './weekview.js';
 
 function getVisibleRows() {
   return Array.from(document.querySelectorAll('#todo-body tr[data-item-id]'));
@@ -134,6 +135,7 @@ export function initKeyboard() {
   document.addEventListener('keydown', (e) => {
     // Escape always closes things
     if (e.key === 'Escape') {
+      if (isWeekViewOpen()) { closeWeekView(); return; }
       if (isShortcutOverlayOpen()) {
         closeShortcutOverlay();
         return;
@@ -211,6 +213,11 @@ export function initKeyboard() {
       case 'f':
         e.preventDefault();
         toggleFocusMode();
+        break;
+      case 'w':
+        e.preventDefault();
+        if (isWeekViewOpen()) closeWeekView();
+        else showWeekView();
         break;
       case 'n':
         e.preventDefault();
