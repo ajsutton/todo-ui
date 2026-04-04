@@ -89,23 +89,29 @@ export function filterItems(items, { filterType, filterStatus, searchQuery }) {
   });
 }
 
-export function sortItems(items, sortColumn, sortDirection) {
+function getColValue(item, col) {
+  if (col === 'priority') {
+    const n = parseInt((item.priority || '').replace('P', ''));
+    return Number.isNaN(n) ? 99 : n;
+  }
+  if (col === 'id') return parseInt((item.id || '').replace('TODO-', '')) || 0;
+  return (item[col] || '').toLowerCase();
+}
+
+export function sortItems(items, sortColumn, sortDirection, sortKeys) {
+  // sortKeys: optional array of { col, dir } for multi-sort
+  const keys = sortKeys && sortKeys.length > 0
+    ? sortKeys
+    : [{ col: sortColumn, dir: sortDirection }];
+
   return items.sort((a, b) => {
-    let aVal, bVal;
-    if (sortColumn === 'priority') {
-      const aNum = parseInt((a.priority || '').replace('P', ''));
-      const bNum = parseInt((b.priority || '').replace('P', ''));
-      aVal = Number.isNaN(aNum) ? 99 : aNum;
-      bVal = Number.isNaN(bNum) ? 99 : bNum;
-    } else if (sortColumn === 'id') {
-      aVal = parseInt((a.id || '').replace('TODO-', '')) || 0;
-      bVal = parseInt((b.id || '').replace('TODO-', '')) || 0;
-    } else {
-      aVal = (a[sortColumn] || '').toLowerCase();
-      bVal = (b[sortColumn] || '').toLowerCase();
+    for (const { col, dir } of keys) {
+      const aVal = getColValue(a, col);
+      const bVal = getColValue(b, col);
+      const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+      if (cmp !== 0) return dir === 'asc' ? cmp : -cmp;
     }
-    const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-    return sortDirection === 'asc' ? cmp : -cmp;
+    return 0;
   });
 }
 

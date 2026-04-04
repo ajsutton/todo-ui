@@ -307,13 +307,26 @@ th:last-child:hover {
 }
 
 th.sort-asc::after {
-  content: " \25B2";
+  content: " ▲";
   font-size: 10px;
 }
 
 th.sort-desc::after {
-  content: " \25BC";
+  content: " ▼";
   font-size: 10px;
+}
+
+th.sort-secondary {
+  color: var(--muted);
+}
+th.sort-secondary::after {
+  opacity: 0.6;
+}
+th[data-sort-index]::before {
+  content: attr(data-sort-index) " ";
+  font-size: 9px;
+  color: var(--muted);
+  vertical-align: super;
 }
 
 td {

@@ -84,7 +84,7 @@ export function renderTable() {
     filterStatus: appState.filterStatus,
     searchQuery: appState.searchQuery,
   });
-  items = sortItems(items, appState.sortColumn, appState.sortDirection);
+  items = sortItems(items, appState.sortColumn, appState.sortDirection, appState.sortKeys);
 
   updateSearchBadge(items.length, allItems.length);
   renderStats();

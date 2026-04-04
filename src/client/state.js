@@ -29,6 +29,7 @@ export const appState = {
   // UI filter/sort state (initialized from URL)
   sortColumn: urlParams.sortColumn,
   sortDirection: urlParams.sortDirection,
+  sortKeys: [],  // multi-sort: array of { col, dir } — overrides sortColumn/sortDirection when non-empty
   filterType: urlParams.filterType,
   filterStatus: urlParams.filterStatus,
   searchQuery: urlParams.searchQuery,
