@@ -2042,3 +2042,51 @@ tbody tr {
   gap: 6px;
   flex-wrap: wrap;
 }
+
+/* Search history dropdown */
+.search-history-dropdown {
+  position: fixed;
+  z-index: 800;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px var(--shadow);
+  overflow: hidden;
+  min-width: 200px;
+  animation: fade-in 0.1s ease;
+}
+.search-history-dropdown.hidden { display: none; }
+
+.sh-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.sh-clear {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+.sh-clear:hover { color: var(--fg); background: var(--bg-secondary); }
+
+.sh-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--fg);
+  transition: background 0.08s;
+}
+.sh-item:hover { background: var(--table-hover); }
+.sh-icon { color: var(--muted); font-size: 12px; flex-shrink: 0; }
+.sh-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

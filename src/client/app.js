@@ -17,6 +17,7 @@ import { copyExport } from './export.js';
 import { initHoverCards } from './hovercard.js';
 import { initQuickAdd } from './quickadd.js';
 import { initPalette } from './palette.js';
+import { initSearchHistory, recordSearch, hideDropdown } from './searchhistory.js';
 
 function showUpdateDialog(results, discovered, errors) {
   errors = errors || [];
@@ -216,10 +217,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Filters
-  document.getElementById('filter-search').oninput = (e) => {
+  const searchEl = document.getElementById('filter-search');
+  searchEl.oninput = (e) => {
     appState.searchQuery = e.target.value;
     renderTable();
   };
+  searchEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && searchEl.value.trim().length >= 2) {
+      recordSearch(searchEl.value.trim());
+      hideDropdown();
+    }
+  });
+  initSearchHistory(searchEl, (query) => {
+    searchEl.value = query;
+    appState.searchQuery = query;
+    syncUrl();
+    renderTable();
+  });
   document.getElementById('filter-type').onchange = (e) => {
     appState.filterType = e.target.value;
     renderTable();
