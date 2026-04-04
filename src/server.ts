@@ -46,6 +46,29 @@ const PORT = parseInt(process.env.TODO_UI_PORT ?? "3456", 10);
 const HOST = process.env.TODO_UI_HOST ?? "0.0.0.0";
 const CLAUDE_CWD = process.env.CLAUDE_CWD ?? process.cwd();
 const PUBLIC_DIR = path.join(import.meta.dir, "..", "public");
+const CLIENT_SRC_DIR = path.join(import.meta.dir, "client");
+
+let bundledJs = "";
+
+async function buildClientBundle(): Promise<void> {
+  try {
+    const result = await Bun.build({
+      entrypoints: [path.join(CLIENT_SRC_DIR, "app.js")],
+      target: "browser",
+      format: "iife",
+    });
+    if (!result.success) {
+      console.error("[build] Failed:", result.logs);
+      return;
+    }
+    bundledJs = await result.outputs[0].text();
+    console.log(`[build] Bundle built (${(bundledJs.length / 1024).toFixed(1)}kb)`);
+  } catch (err) {
+    console.error("[build] Error:", err);
+  }
+}
+
+await buildClientBundle();
 
 const watcher = new TodoWatcher(readTodoDirFromConfig());
 
@@ -246,7 +269,9 @@ const server = Bun.serve({
       return new Response(Bun.file(path.join(PUBLIC_DIR, "style.css")));
     }
     if (pathname === "/app.js") {
-      return new Response(Bun.file(path.join(PUBLIC_DIR, "app.js")));
+      return new Response(bundledJs, {
+        headers: { "Content-Type": "application/javascript; charset=utf-8" },
+      });
     }
 
     // API routes
@@ -573,10 +598,18 @@ const server = Bun.serve({
   },
 });
 
-// Watch public directory for changes and trigger browser reload
-watch(PUBLIC_DIR, { recursive: true }, (event, filename) => {
-  if (filename && (filename.endsWith(".js") || filename.endsWith(".css") || filename.endsWith(".html"))) {
-    broadcast({ type: "reload" } as WsMessage);
+// Watch client source for JS changes — rebuild bundle then reload browsers
+watch(CLIENT_SRC_DIR, { recursive: true }, async (_event, filename) => {
+  if (filename && filename.endsWith(".js")) {
+    await buildClientBundle();
+    broadcast({ type: "reload" });
+  }
+});
+
+// Watch public dir for CSS/HTML changes — reload browsers directly
+watch(PUBLIC_DIR, { recursive: true }, (_event, filename) => {
+  if (filename && (filename.endsWith(".css") || filename.endsWith(".html"))) {
+    broadcast({ type: "reload" });
   }
 });
 
