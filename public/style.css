@@ -2396,6 +2396,23 @@ tbody tr {
 .recents-pri { font-size: 10px; font-weight: 700; flex-shrink: 0; width: 20px; }
 .recents-desc { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
 
+/* Snooze picker */
+.snooze-picker {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-shadow: 0 8px 24px var(--shadow);
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 200px;
+}
+.snooze-title { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+.snooze-btn { opacity: 0.5; transition: opacity 0.15s; }
+.snooze-btn:hover { opacity: 1; }
+
 /* Row refresh flash */
 @keyframes row-refresh-flash {
   0%, 100% { background: transparent; }
