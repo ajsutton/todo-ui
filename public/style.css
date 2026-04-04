@@ -2895,3 +2895,27 @@ body.has-p0::before {
   gap: 4px;
   align-items: center;
 }
+
+/* Inline description editing */
+.desc-text {
+  cursor: default;
+}
+
+.desc-text:hover {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-color: var(--muted);
+}
+
+.desc-inline-input {
+  font: inherit;
+  font-size: 13px;
+  width: min(100%, 360px);
+  padding: 2px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}

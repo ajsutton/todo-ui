@@ -202,11 +202,48 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
   }
 
   const descSpan = document.createElement('span');
+  descSpan.className = 'desc-text';
   descSpan.innerHTML = item.descriptionHtml;
   descSpan.querySelectorAll('a').forEach(a => {
     a.target = '_blank';
     a.rel = 'noopener';
     a.onclick = (e) => e.stopPropagation();
+  });
+  // Double-click to inline-edit description
+  descSpan.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'desc-inline-input';
+    input.value = item.description;
+    input.title = 'Press Enter to save, Escape to cancel';
+    descSpan.replaceWith(input);
+    input.focus();
+    input.select();
+    const cancel = () => {
+      input.replaceWith(descSpan);
+    };
+    const save = async () => {
+      const newDesc = input.value.trim();
+      if (!newDesc || newDesc === item.description) { cancel(); return; }
+      input.disabled = true;
+      try {
+        const { updateDescription } = await import('./actions.js');
+        await updateDescription(item.id, newDesc);
+        // Server will push update via WebSocket; just restore span for now
+        input.replaceWith(descSpan);
+      } catch (err) {
+        input.disabled = false;
+        input.title = 'Error: ' + err.message;
+        input.style.borderColor = 'var(--status-failing)';
+      }
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); save(); }
+      if (e.key === 'Escape') { e.stopPropagation(); cancel(); }
+    });
+    input.addEventListener('blur', cancel);
+    input.addEventListener('click', (e) => e.stopPropagation());
   });
   tdDesc.appendChild(descSpan);
 

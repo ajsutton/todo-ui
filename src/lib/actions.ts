@@ -42,6 +42,7 @@ export function buildStatusString(ghStatus: GhPrStatus): string {
 }
 
 // Cell indices when splitting on "|" (index 0 is empty before first |)
+const CELL_DESCRIPTION = 2;
 const CELL_STATUS = 4;
 const CELL_PRIORITY = 5;
 const CELL_DUE = 6;
@@ -135,6 +136,15 @@ export function setDue(todoDir: string, id: string, due: string): void {
   const filePath = path.join(todoDir, "TODO.md");
   const content = readFileSync(filePath, "utf-8");
   const updated = replaceCells(content, id, new Map([[CELL_DUE, due]]));
+  atomicWrite(filePath, updated);
+}
+
+export function setDescription(todoDir: string, id: string, description: string): void {
+  const trimmed = description.trim();
+  if (!trimmed) throw new Error("Description cannot be empty");
+  const filePath = path.join(todoDir, "TODO.md");
+  const content = readFileSync(filePath, "utf-8");
+  const updated = replaceCells(content, id, new Map([[CELL_DESCRIPTION, trimmed]]));
   atomicWrite(filePath, updated);
 }
 
