@@ -1769,3 +1769,24 @@ body.focus-mode {
 tbody tr {
   animation: row-appear 0.15s ease both;
 }
+
+/* Quick-add banner */
+.quickadd-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px;
+  background: color-mix(in srgb, var(--status-pass) 8%, var(--bg));
+  border-bottom: 1px solid color-mix(in srgb, var(--status-pass) 25%, var(--border));
+  font-size: 13px;
+  animation: slide-down 0.2s ease;
+}
+
+.quickadd-icon { font-size: 16px; }
+.quickadd-label { flex: 1; }
+.quickadd-buttons { display: flex; gap: 4px; }
+.quickadd-dismiss { font-size: 18px; color: var(--muted); }
+.quickadd-p0 { color: var(--p0); border-color: var(--p0); }
+.quickadd-p1 { color: var(--p1); border-color: var(--p1); }
+.quickadd-p2 { color: var(--p2); border-color: var(--p2); }
+.quickadd-p3 { color: var(--p3); border-color: var(--p3); }
