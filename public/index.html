@@ -62,6 +62,16 @@
     </div>
   </div>
 
+  <div id="quick-filters" class="quick-filters" role="toolbar" aria-label="Quick filters">
+    <button class="qf-chip" data-query="p:0" title="Show only P0 items">P0</button>
+    <button class="qf-chip" data-query="p:0-1" title="Show P0 and P1 items">P0–P1</button>
+    <button class="qf-chip" data-query="overdue" title="Show overdue items">Overdue</button>
+    <button class="qf-chip" data-query="blocked" title="Show blocked items">Blocked</button>
+    <button class="qf-chip" data-query="type:review" title="Show Review items">Reviews</button>
+    <button class="qf-chip" data-query="type:pr" title="Show PR items">PRs</button>
+    <button class="qf-chip" data-query="status:failing" title="Show items with failing CI">CI Failing</button>
+  </div>
+
   <div id="stats-bar" class="stats-bar"></div>
 
   <div id="bulk-toolbar" class="bulk-toolbar hidden">

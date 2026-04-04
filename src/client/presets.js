@@ -50,6 +50,7 @@ export function applyPreset(preset) {
   if (searchEl) searchEl.value = appState.searchQuery;
 
   syncUrl();
+  document.dispatchEvent(new Event('search-changed'));
   import('./render.js').then(m => m.renderTable());
 }
 
