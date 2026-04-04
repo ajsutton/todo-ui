@@ -4,7 +4,7 @@ import { syncUrl } from './url.js';
 import { typeLabel, priorityIcon, statusEmoji, TYPE_EMOJI } from './icons.js';
 import { filterItems, sortItems, filterSubItem } from './filters.js';
 import { showPriorityPicker, showSubPriorityPicker, showDatePicker } from './pickers.js';
-import { updateStaleTracker } from './stale.js';
+import { updateStaleTracker, staleDays } from './stale.js';
 import { selection, isSelectionMode, toggleSelected } from './bulk.js';
 import { computeUrgency, urgencyColor } from './urgency.js';
 import { recordSnapshot, renderSparkline } from './history.js';
@@ -135,7 +135,12 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
   const isDone = !!item.doneDate;
   if (isDone) tr.classList.add('status-done');
   if (item.blocked) tr.classList.add('status-blocked');
-  if (!isDone && staleIds.has(item.id)) tr.classList.add('row-stale');
+  if (!isDone && staleIds.has(item.id)) {
+    const days = staleDays(item.id);
+    tr.classList.add('row-stale');
+    if (days >= 30) tr.classList.add('row-stale-30');
+    else if (days >= 14) tr.classList.add('row-stale-14');
+  }
   tr.dataset.itemId = item.id;
   tr.onclick = async () => {
     const showDetail = await getShowDetail();
