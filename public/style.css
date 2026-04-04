@@ -3048,3 +3048,79 @@ mark.search-highlight {
 .row-enter {
   animation: row-enter 0.25s ease-out both;
 }
+
+/* Session stats badge */
+.session-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--status-pass);
+  background: color-mix(in srgb, var(--status-pass) 12%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--status-pass) 30%, transparent);
+  border-radius: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background 0.12s;
+  white-space: nowrap;
+}
+
+.session-badge:hover {
+  background: color-mix(in srgb, var(--status-pass) 20%, var(--bg));
+}
+
+/* Session popover */
+.session-popover {
+  position: fixed;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 20px var(--shadow);
+  padding: 12px 14px;
+  min-width: 260px;
+  max-width: 320px;
+  z-index: 1000;
+  font-size: 13px;
+}
+
+.sp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+
+.sp-duration {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.sp-item {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.sp-item:last-child { border-bottom: none; }
+
+.sp-check {
+  color: var(--status-pass);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.sp-desc {
+  color: var(--fg-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.sp-more {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  margin-top: 6px;
+}

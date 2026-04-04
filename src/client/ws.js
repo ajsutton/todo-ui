@@ -5,6 +5,7 @@ import { checkForNotifiableChanges } from './notifications.js';
 import { refreshOpenDetail } from './detail.js';
 import { handleClaudeStatus } from './claude.js';
 import { handleStandupStatus, displayStandupClaudeReport } from './standup.js';
+import { updateSessionStats } from './session.js';
 
 function handleUpdateProgress(data) {
   const progress = document.getElementById('update-progress');
@@ -74,6 +75,7 @@ export function connectWebSocket() {
       appState.dataLoaded = true;
       refreshStale();
       checkForNotifiableChanges(appState.items);
+      updateSessionStats(appState.items);
       renderTable();
       prefetchSubItems();
       refreshOpenDetail();

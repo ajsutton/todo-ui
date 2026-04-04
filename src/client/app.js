@@ -10,6 +10,7 @@ import { showStandupDialog, closeStandupDialog, switchStandupTab, copyStandupRep
 import { sendClaudePrompt, handleClaudeStatus, pushHistory, resetHistoryNav, navigateHistory } from './claude.js';
 import { initKeyboard, showShortcutOverlay, closeShortcutOverlay } from './keyboard.js';
 import { initTheme, toggleTheme, initAccentPicker, showAccentPicker } from './theme.js';
+import { initSessionBadge } from './session.js';
 import { requestNotificationPermission, canNotify } from './notifications.js';
 import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar, showBulkTagPicker } from './bulk.js';
 import { showSuggestionBanner } from './suggestion.js';
@@ -178,9 +179,10 @@ async function refreshAll() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Initialize theme and accent color
+  // Initialize theme, accent color, and session tracking
   initTheme();
   initAccentPicker();
+  initSessionBadge();
 
   // Connect WebSocket
   connectWebSocket();
