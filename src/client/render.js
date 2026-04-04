@@ -7,6 +7,7 @@ import { showPriorityPicker, showSubPriorityPicker, showDatePicker } from './pic
 import { updateStaleTracker } from './stale.js';
 import { selection, isSelectionMode, toggleSelected } from './bulk.js';
 import { computeUrgency, urgencyColor } from './urgency.js';
+import { recordSnapshot, renderSparkline } from './history.js';
 
 // Stale IDs maintained across renders
 let staleIds = new Set();
@@ -386,11 +387,17 @@ export function renderStats() {
     }).join('') + '</div>';
   }
 
+  const p0Count = priCounts['P0'] || 0;
+  const p1Count = priCounts['P1'] || 0;
+  const history = recordSnapshot(active.length, p0Count, p1Count);
+  const sparkSvg = renderSparkline(history, 60, 16);
+
   const alerts = [];
   if (blocked.length > 0) alerts.push(`<span class="stat-alert stat-blocked" data-filter-key="search" data-filter-val="blocked" role="button">${blocked.length} blocked</span>`);
   if (overdue.length > 0) alerts.push(`<span class="stat-alert stat-overdue" data-filter-key="search" data-filter-val="overdue" role="button">${overdue.length} overdue</span>`);
   alerts.push(`<span class="stat-alert stat-done">${doneThisWeek.length} done this week</span>`);
   alerts.push(`<span class="stat-alert-muted">${donePercent}% complete</span>`);
+  if (sparkSvg) alerts.push(`<span class="stat-sparkline" title="Active item count over time (last ${history.length} snapshots)">${sparkSvg}</span>`);
 
   bar.innerHTML = `
     <div class="stats-row">
