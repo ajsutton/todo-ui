@@ -9,7 +9,7 @@ import { showLogDialog, closeLogDialog, loadLogPage } from './log.js';
 import { showStandupDialog, closeStandupDialog, switchStandupTab, copyStandupReport, generateStandupWithClaude } from './standup.js';
 import { sendClaudePrompt, handleClaudeStatus, pushHistory, resetHistoryNav, navigateHistory } from './claude.js';
 import { initKeyboard, showShortcutOverlay, closeShortcutOverlay } from './keyboard.js';
-import { initTheme, toggleTheme } from './theme.js';
+import { initTheme, toggleTheme, initAccentPicker, showAccentPicker } from './theme.js';
 import { requestNotificationPermission, canNotify } from './notifications.js';
 import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar } from './bulk.js';
 import { showSuggestionBanner } from './suggestion.js';
@@ -178,8 +178,9 @@ async function refreshAll() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Initialize theme
+  // Initialize theme and accent color
   initTheme();
+  initAccentPicker();
 
   // Connect WebSocket
   connectWebSocket();
@@ -502,6 +503,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Theme toggle
   const themeBtn = document.getElementById('theme-toggle');
   if (themeBtn) themeBtn.onclick = toggleTheme;
+
+  // Accent color picker
+  const accentBtn = document.getElementById('accent-btn');
+  if (accentBtn) accentBtn.onclick = () => showAccentPicker(accentBtn);
 
   // Keyboard shortcut overlay close button
   const overlayClose = document.getElementById('shortcut-overlay-close');

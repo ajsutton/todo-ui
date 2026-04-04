@@ -2945,3 +2945,51 @@ body.has-p0::before {
 @media print {
   .progress-bar-track { display: none; }
 }
+
+/* Accent color picker */
+.accent-picker {
+  position: fixed;
+  display: flex;
+  gap: 6px;
+  padding: 10px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 20px var(--shadow);
+  z-index: 1000;
+  align-items: center;
+}
+
+.accent-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.12s, border-color 0.12s;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.accent-swatch:hover {
+  transform: scale(1.15);
+}
+
+.accent-swatch.active {
+  border-color: var(--fg);
+  transform: scale(1.1);
+}
+
+.accent-swatch-reset {
+  background: var(--bg-secondary) !important;
+  color: var(--fg-secondary);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-color: var(--border) !important;
+}
+
+.accent-swatch-reset:hover {
+  border-color: var(--fg) !important;
+}
