@@ -136,6 +136,14 @@ function isShortcutOverlayOpen() {
 
 export function initKeyboard() {
   document.addEventListener('keydown', (e) => {
+    // Ctrl+Z: undo last action (works everywhere)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+      import('./undo.js').then(({ triggerUndo }) => {
+        if (triggerUndo()) e.preventDefault();
+      });
+      return;
+    }
+
     // Escape always closes things
     if (e.key === 'Escape') {
       if (isDigestOpen()) { closeDigest(); return; }
