@@ -15,6 +15,7 @@ import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSel
 import { showSuggestionBanner } from './suggestion.js';
 import { copyExport } from './export.js';
 import { initHoverCards } from './hovercard.js';
+import { initQuickAdd } from './quickadd.js';
 
 function showUpdateDialog(results, discovered, errors) {
   errors = errors || [];
@@ -384,4 +385,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize hover cards
   initHoverCards();
+
+  // Quick-add via paste
+  initQuickAdd();
 });
