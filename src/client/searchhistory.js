@@ -1,5 +1,7 @@
 // Remembers recent searches in localStorage and shows them as a dropdown
 // when focusing the search input.
+import { appState } from './state.js';
+import { getAllTags } from './tags.js';
 
 const STORAGE_KEY = 'todo-search-history';
 const MAX_ENTRIES = 10;
@@ -96,19 +98,81 @@ export function hideDropdown() {
   currentInput = null;
 }
 
+// Syntax-aware suggestions when typing prefixes
+function getSyntaxSuggestions(value) {
+  const val = value.trim();
+  const suggestions = [];
+
+  if (val === 'p' || val === 'p:') {
+    ['p:0', 'p:1', 'p:0-1', 'p:0-2', 'p:2-3'].forEach(s => suggestions.push({ icon: '#', text: s, insert: s }));
+  } else if (val === 'type' || val === 'type:') {
+    ['type:pr', 'type:review', 'type:issue', 'type:workstream'].forEach(s => suggestions.push({ icon: '📂', text: s, insert: s }));
+  } else if (val === 'status' || val === 'status:') {
+    ['status:failing', 'status:approved', 'status:draft', 'status:open'].forEach(s => suggestions.push({ icon: '🔖', text: s, insert: s }));
+  } else if (val === 'due' || val === 'due:') {
+    ['due:today', 'due:week', 'due:3', 'due:7'].forEach(s => suggestions.push({ icon: '📅', text: s, insert: s }));
+  } else if (val.startsWith('tag:')) {
+    const prefix = val.slice(4).toLowerCase();
+    getAllTags().filter(t => t.startsWith(prefix)).slice(0, 6).forEach(t =>
+      suggestions.push({ icon: '🏷', text: `tag:${t}`, insert: `tag:${t}` })
+    );
+  } else if (val.startsWith('@')) {
+    // Repo suggestions from items
+    const prefix = val.slice(1).toLowerCase();
+    const repos = [...new Set((appState.items || []).filter(i => i.repo).map(i => i.repo))];
+    repos.filter(r => r.toLowerCase().includes(prefix)).slice(0, 6).forEach(r =>
+      suggestions.push({ icon: '📦', text: `@${r}`, insert: `@${r}` })
+    );
+  }
+
+  return suggestions;
+}
+
 export function initSearchHistory(inputEl, onSelect) {
   inputEl.addEventListener('focus', () => {
     if (!inputEl.value) showDropdown(inputEl, onSelect);
   });
   inputEl.addEventListener('input', () => {
-    // Hide dropdown when user types
-    if (inputEl.value) hideDropdown();
-    else showDropdown(inputEl, onSelect);
+    const val = inputEl.value;
+    if (!val) {
+      showDropdown(inputEl, onSelect);
+      return;
+    }
+    // Show syntax suggestions for known prefixes
+    const suggestions = getSyntaxSuggestions(val);
+    if (suggestions.length > 0) {
+      showSyntaxSuggestions(inputEl, suggestions, onSelect);
+    } else {
+      hideDropdown();
+    }
   });
   // Re-show on clear
   inputEl.addEventListener('search', () => {
     if (!inputEl.value) setTimeout(() => showDropdown(inputEl, onSelect), 50);
   });
+}
+
+function showSyntaxSuggestions(inputEl, suggestions, onSelect) {
+  if (!dropdownEl) createDropdown();
+  currentInput = inputEl;
+
+  dropdownEl.innerHTML = suggestions.map(s =>
+    `<div class="sh-item sh-syntax" data-insert="${escAttr(s.insert)}">
+      <span class="sh-icon">${s.icon}</span>
+      <span class="sh-text">${escHtml(s.text)}</span>
+    </div>`
+  ).join('');
+
+  dropdownEl.querySelectorAll('.sh-syntax').forEach(item => {
+    item.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      onSelect(item.dataset.insert);
+      hideDropdown();
+    });
+  });
+
+  positionDropdown(inputEl);
+  dropdownEl.classList.remove('hidden');
 }
 
 function escHtml(s) {
