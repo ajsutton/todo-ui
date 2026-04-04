@@ -8,6 +8,7 @@ import { handleStandupStatus, displayStandupClaudeReport } from './standup.js';
 import { updateSessionStats } from './session.js';
 import { initChangelogSnapshot, diffSinceLastVisit, showChangelogBanner, updateLatestItems } from './changelog.js';
 import { updateGoalWidget } from './goals.js';
+import { updateTabTitle } from './tabtitle.js';
 
 function handleUpdateProgress(data) {
   const progress = document.getElementById('update-progress');
@@ -83,6 +84,7 @@ export function connectWebSocket() {
       appState.dataLoaded = true;
       updateLatestItems(appState.items);
       updateGoalWidget(appState.items);
+      updateTabTitle(appState.items);
       refreshStale();
       checkForNotifiableChanges(appState.items);
       updateSessionStats(appState.items);
