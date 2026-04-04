@@ -389,13 +389,18 @@ tr:hover td {
   opacity: var(--status-done-opacity);
 }
 
-.status-failing {
-  color: var(--status-fail);
-}
+.status-cell { font-size: 12px; }
 
-.status-passing {
-  color: var(--status-pass);
-}
+.status-failing { color: var(--status-fail); font-weight: 500; }
+.status-passing { color: var(--status-pass); }
+.status-approved { color: var(--status-pass); font-weight: 500; }
+.status-changes-requested { color: var(--p1); font-weight: 500; }
+.status-draft { color: var(--muted); }
+.status-merge-issue { color: var(--p0); }
+.status-merged { color: var(--muted); }
+.status-closed { color: var(--muted); text-decoration: line-through; }
+.status-blocked-text { color: var(--p0); font-weight: 500; }
+.status-pending { color: var(--p2); }
 
 /* Actions cell */
 .actions-cell {
