@@ -14,7 +14,7 @@ import { initSessionBadge } from './session.js';
 import { requestNotificationPermission, canNotify } from './notifications.js';
 import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar, showBulkTagPicker } from './bulk.js';
 import { showSuggestionBanner } from './suggestion.js';
-import { copyExport } from './export.js';
+import { copyExport, downloadCsv } from './export.js';
 import { initHoverCards } from './hovercard.js';
 import { initQuickAdd } from './quickadd.js';
 import { initPalette } from './palette.js';
@@ -440,6 +440,9 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => { exportBtn.textContent = orig; }, 1500);
     });
   }
+
+  // CSV download button
+  document.getElementById('export-csv')?.addEventListener('click', downloadCsv);
 
   // "What's next?" suggestion
   document.getElementById('show-next')?.addEventListener('click', showSuggestionBanner);
