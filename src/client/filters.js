@@ -70,7 +70,7 @@ export function parseSearchQuery(query) {
   return result;
 }
 
-export function filterItems(items, { filterType, filterStatus, searchQuery }, getItemTags) {
+export function filterItems(items, { filterType, filterStatus, searchQuery }, getItemTags, getItemNote) {
   const query = (searchQuery || '').trim();
   const parsed = parseSearchQuery(query);
   const today = new Date().toISOString().slice(0, 10);
@@ -128,9 +128,10 @@ export function filterItems(items, { filterType, filterStatus, searchQuery }, ge
       if (!repo.includes(parsed.repoFilter)) return false;
     }
 
-    // Text terms — must all match description
+    // Text terms — must all match description (and personal note if provided)
     for (const term of parsed.textTerms) {
-      const searchable = [item.id, item.description, item.type, item.status, item.priority, item.due].join(' ').toLowerCase();
+      const note = getItemNote ? (getItemNote(item.id) || '') : '';
+      const searchable = [item.id, item.description, item.type, item.status, item.priority, item.due, note].join(' ').toLowerCase();
       if (!searchable.includes(term)) return false;
     }
 
