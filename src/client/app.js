@@ -21,6 +21,7 @@ import { toggleGroupBy, isGroupByMode } from './groupby.js';
 import { renderPresetsBar, showSavePresetDialog } from './presets.js';
 import { initSearchHistory, recordSearch, hideDropdown } from './searchhistory.js';
 import { initNewItem } from './newitem.js';
+import { showWeekView } from './weekview.js';
 
 function showUpdateDialog(results, discovered, errors) {
   errors = errors || [];
@@ -355,6 +356,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // "What's next?" suggestion
   document.getElementById('show-next')?.addEventListener('click', showSuggestionBanner);
+
+  // Week view
+  document.getElementById('show-week')?.addEventListener('click', showWeekView);
 
   // Saved filter presets
   renderPresetsBar();
