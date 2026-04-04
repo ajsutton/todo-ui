@@ -280,6 +280,27 @@ export function initKeyboard() {
         }
         break;
       }
+      case 's': {
+        // Snooze selected item until tomorrow
+        const rowsS = getVisibleRows();
+        if (appState.selectedRowIndex >= 0 && appState.selectedRowIndex < rowsS.length) {
+          e.preventDefault();
+          const id = rowsS[appState.selectedRowIndex].dataset.itemId;
+          if (id) {
+            import('./snooze.js').then(({ snoozeItem, isSnoozed, unsnoozeItem }) => {
+              if (isSnoozed(id)) {
+                unsnoozeItem(id);
+              } else {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                snoozeItem(id, tomorrow.toISOString().slice(0, 10));
+              }
+              import('./render.js').then(m => m.renderTable());
+            });
+          }
+        }
+        break;
+      }
     }
   });
 }
