@@ -2,7 +2,7 @@
 import { appState } from './state.js';
 import { syncUrl } from './url.js';
 import { typeLabel, priorityIcon, statusEmoji, TYPE_EMOJI } from './icons.js';
-import { filterItems, sortItems, filterSubItem } from './filters.js';
+import { filterItems, sortItems, filterSubItem, parseSearchQuery } from './filters.js';
 import { showPriorityPicker, showSubPriorityPicker, showDatePicker } from './pickers.js';
 import { updateStaleTracker, staleDays } from './stale.js';
 import { selection, isSelectionMode, toggleSelected } from './bulk.js';
@@ -64,6 +64,25 @@ export function formatDueDate(due) {
 
 export function refreshStale() {
   staleIds = updateStaleTracker(appState.items);
+}
+
+/**
+ * Highlight occurrences of search terms in an HTML string.
+ * Only highlights text nodes (not inside tags) to avoid breaking links.
+ */
+function highlightTerms(html, terms) {
+  if (!terms.length) return html;
+  // Work on the text content parts — split on tags and only replace in text nodes
+  return html.replace(/(<[^>]+>|[^<]+)/g, (chunk) => {
+    if (chunk.startsWith('<')) return chunk; // tag, skip
+    let result = chunk;
+    for (const term of terms) {
+      if (!term) continue;
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      result = result.replace(new RegExp(escaped, 'gi'), (m) => `<mark class="search-highlight">${m}</mark>`);
+    }
+    return result;
+  });
 }
 
 function updateSearchBadge(shown, total) {
@@ -220,7 +239,9 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
 
   const descSpan = document.createElement('span');
   descSpan.className = 'desc-text';
-  descSpan.innerHTML = item.descriptionHtml;
+  // Highlight search terms in description
+  const searchTerms = parseSearchQuery(appState.searchQuery || '').textTerms;
+  descSpan.innerHTML = highlightTerms(item.descriptionHtml, searchTerms);
   descSpan.querySelectorAll('a').forEach(a => {
     a.target = '_blank';
     a.rel = 'noopener';
