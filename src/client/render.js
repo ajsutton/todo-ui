@@ -4,6 +4,10 @@ import { syncUrl } from './url.js';
 import { typeLabel, priorityIcon, statusEmoji, TYPE_EMOJI } from './icons.js';
 import { filterItems, sortItems, filterSubItem } from './filters.js';
 import { showPriorityPicker, showSubPriorityPicker, showDatePicker } from './pickers.js';
+import { updateStaleTracker } from './stale.js';
+
+// Stale IDs maintained across renders
+let staleIds = new Set();
 
 // Lazy-loaded to avoid circular dependency (detail.js imports render.js indirectly)
 function getShowDetail() {
@@ -26,6 +30,10 @@ export function formatDueDate(due) {
   if (diffDays < 0) return `${Math.abs(diffDays)}d ago`;
   // Further out: show Mon DD
   return t.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+export function refreshStale() {
+  staleIds = updateStaleTracker(appState.items);
 }
 
 export function renderTable() {
@@ -73,6 +81,7 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
   const isDone = !!item.doneDate;
   if (isDone) tr.classList.add('status-done');
   if (item.blocked) tr.classList.add('status-blocked');
+  if (!isDone && staleIds.has(item.id)) tr.classList.add('row-stale');
   tr.dataset.itemId = item.id;
   tr.onclick = async () => {
     const showDetail = await getShowDetail();
