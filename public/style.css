@@ -1258,3 +1258,39 @@ td.editable:hover {
   flex-direction: column;
   min-height: 0;
 }
+
+/* Rendered markdown in standup Claude tab */
+.standup-claude-rendered {
+  padding: 4px 0;
+  line-height: 1.6;
+  font-size: 14px;
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+.standup-claude-rendered .standup-md-h {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1em 0 0.4em;
+  color: var(--fg);
+}
+
+.standup-claude-rendered h1.standup-md-h { font-size: 1.15rem; }
+.standup-claude-rendered h2.standup-md-h { font-size: 1.05rem; }
+
+.standup-claude-rendered p {
+  margin: 0.4em 0;
+}
+
+.standup-md-list {
+  margin: 0.4em 0;
+  padding-left: 1.4em;
+}
+
+.standup-md-list li {
+  margin: 0.25em 0;
+}
+
+.standup-claude-rendered a {
+  color: var(--accent);
+}

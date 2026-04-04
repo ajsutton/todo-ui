@@ -1112,6 +1112,13 @@ let currentStandupReport = null;
 
 async function showStandupDialog() {
   const dialog = document.getElementById('standup-dialog');
+  // Reset Claude tab state
+  standupClaudeRawOutput = '';
+  document.getElementById('standup-claude-output').textContent = '';
+  document.getElementById('standup-claude-output').classList.add('hidden');
+  document.getElementById('standup-claude-output').classList.remove('claude-error');
+  document.getElementById('standup-claude-rendered').innerHTML = '';
+  document.getElementById('standup-claude-rendered').classList.add('hidden');
   dialog.classList.remove('hidden');
   switchStandupTab('report');
   await loadStandupReport();
@@ -1155,7 +1162,7 @@ function formatReportAsMarkdown(report) {
     lines.push('');
     lines.push('*Completed*');
     for (const item of report.yesterday.done) {
-      lines.push(`• ${item.id}: ${descText(item.description)}`);
+      lines.push(`• ${descWithRefSlack(item.description)}`);
     }
   }
 
@@ -1163,7 +1170,7 @@ function formatReportAsMarkdown(report) {
     lines.push('');
     lines.push('*Status Changes*');
     for (const c of report.yesterday.statusChanges) {
-      lines.push(`• ${c.id}: ${descText(c.description)} (${c.oldStatus} → ${c.newStatus})`);
+      lines.push(`• ${descWithRefSlack(c.description)} (${c.oldStatus} → ${c.newStatus})`);
     }
   }
 
@@ -1171,7 +1178,7 @@ function formatReportAsMarkdown(report) {
     lines.push('');
     lines.push('*GitHub Activity*');
     for (const a of report.yesterday.githubActivity) {
-      lines.push(`• ${a.action} ${a.repo}: ${a.title}`);
+      lines.push(`• ${a.action} <${a.url}|${a.repo}>: ${a.title}`);
     }
   }
 
@@ -1187,7 +1194,7 @@ function formatReportAsMarkdown(report) {
     lines.push('');
     lines.push('*High Priority*');
     for (const item of report.today.highPriority) {
-      lines.push(`• ${item.priority} ${item.id}: ${descText(item.description)} — ${item.status}`);
+      lines.push(`• ${item.priority} ${descWithRefSlack(item.description)} — ${item.status}`);
     }
   }
 
@@ -1195,7 +1202,7 @@ function formatReportAsMarkdown(report) {
     lines.push('');
     lines.push('*Overdue*');
     for (const item of report.today.overdue) {
-      lines.push(`• ${item.id}: ${descText(item.description)} (due ${item.due})`);
+      lines.push(`• ${descWithRefSlack(item.description)} (due ${item.due})`);
     }
   }
 
@@ -1203,7 +1210,7 @@ function formatReportAsMarkdown(report) {
     lines.push('');
     lines.push('*Due Today*');
     for (const item of report.today.dueToday) {
-      lines.push(`• ${item.id}: ${descText(item.description)}`);
+      lines.push(`• ${descWithRefSlack(item.description)}`);
     }
   }
 
@@ -1211,7 +1218,7 @@ function formatReportAsMarkdown(report) {
     lines.push('');
     lines.push('*Blocked*');
     for (const item of report.today.blocked) {
-      lines.push(`• ${item.id}: ${descText(item.description)}`);
+      lines.push(`• ${descWithRefSlack(item.description)}`);
     }
   }
 
@@ -1231,8 +1238,7 @@ async function copyStandupReport() {
     if (!currentStandupReport) return;
     text = formatReportAsMarkdown(currentStandupReport);
   } else {
-    const output = document.getElementById('standup-claude-output');
-    text = output.textContent || '';
+    text = standupClaudeRawOutput;
     if (!text.trim()) return;
   }
 
@@ -1262,12 +1268,28 @@ function descText(description) {
   return description.replace(/^\[.*?\]\(.*?\)\s*/, '').trim() || description;
 }
 
-function descHtml(description, githubUrl) {
-  const text = descText(description);
-  if (githubUrl) {
-    return `<a href="${githubUrl}" target="_blank" rel="noopener">${escHtml(text)}</a>`;
+// Render description as HTML, showing "[org/repo#N](url) rest" as a linked ref + text
+function descWithRefHtml(description) {
+  const match = description.match(/^\[([^\]]+)\]\(([^)]+)\)\s*(.*)/);
+  if (match) {
+    const ref = escHtml(match[1]);
+    const url = escHtml(match[2]);
+    const rest = escHtml(match[3]);
+    return `<a href="${url}" target="_blank" rel="noopener">${ref}</a>${rest ? ' ' + rest : ''}`;
   }
-  return escHtml(text);
+  return escHtml(description);
+}
+
+// Format description for Slack: "<url|org/repo#N> rest text"
+function descWithRefSlack(description) {
+  const match = description.match(/^\[([^\]]+)\]\(([^)]+)\)\s*(.*)/);
+  if (match) {
+    const ref = match[1];
+    const url = match[2];
+    const rest = match[3];
+    return `<${url}|${ref}>${rest ? ' ' + rest : ''}`;
+  }
+  return description;
 }
 
 function escHtml(str) {
@@ -1304,8 +1326,7 @@ function renderStandupReport(report) {
     ul.className = 'standup-list';
     for (const item of report.yesterday.done) {
       const li = document.createElement('li');
-      li.innerHTML = `<span class="standup-item-id">${escHtml(item.id)}</span>` +
-        `<span class="standup-item-desc">${descHtml(item.description, item.githubUrl)}</span>` +
+      li.innerHTML = `<span class="standup-item-desc">${descWithRefHtml(item.description)}</span>` +
         `<span class="standup-item-badge">${escHtml(item.type)}</span>`;
       ul.appendChild(li);
     }
@@ -1325,8 +1346,7 @@ function renderStandupReport(report) {
     ul.className = 'standup-list';
     for (const c of report.yesterday.statusChanges) {
       const li = document.createElement('li');
-      li.innerHTML = `<span class="standup-item-id">${escHtml(c.id)}</span>` +
-        `<span class="standup-item-desc">${descHtml(c.description, c.githubUrl)}</span>` +
+      li.innerHTML = `<span class="standup-item-desc">${descWithRefHtml(c.description)}</span>` +
         `<span class="standup-arrow">${escHtml(c.oldStatus)} → ${escHtml(c.newStatus)}</span>`;
       ul.appendChild(li);
     }
@@ -1386,8 +1406,8 @@ function renderStandupReport(report) {
       const li = document.createElement('li');
       const priorityCls = item.priority.toLowerCase();
       li.innerHTML = `<span class="standup-item-badge ${priorityCls}">${escHtml(item.priority)}</span>` +
-        `<span class="standup-item-desc">${descHtml(item.description, item.githubUrl)}</span>` +
-        `<span class="standup-item-id">${escHtml(item.status)}</span>`;
+        `<span class="standup-item-desc">${descWithRefHtml(item.description)}</span>` +
+        `<span class="standup-arrow">${escHtml(item.status)}</span>`;
       ul.appendChild(li);
     }
     hpSection.appendChild(ul);
@@ -1406,8 +1426,7 @@ function renderStandupReport(report) {
     ul.className = 'standup-list';
     for (const item of report.today.overdue) {
       const li = document.createElement('li');
-      li.innerHTML = `<span class="standup-item-id">${escHtml(item.id)}</span>` +
-        `<span class="standup-item-desc">${descHtml(item.description, item.githubUrl)}</span>` +
+      li.innerHTML = `<span class="standup-item-desc">${descWithRefHtml(item.description)}</span>` +
         `<span class="standup-item-badge" style="color:var(--status-fail)">due ${escHtml(item.due)}</span>`;
       ul.appendChild(li);
     }
@@ -1427,8 +1446,7 @@ function renderStandupReport(report) {
     ul.className = 'standup-list';
     for (const item of report.today.dueToday) {
       const li = document.createElement('li');
-      li.innerHTML = `<span class="standup-item-id">${escHtml(item.id)}</span>` +
-        `<span class="standup-item-desc">${descHtml(item.description, item.githubUrl)}</span>` +
+      li.innerHTML = `<span class="standup-item-desc">${descWithRefHtml(item.description)}</span>` +
         `<span class="standup-item-badge">${escHtml(item.priority)}</span>`;
       ul.appendChild(li);
     }
@@ -1448,8 +1466,7 @@ function renderStandupReport(report) {
     ul.className = 'standup-list';
     for (const item of report.today.blocked) {
       const li = document.createElement('li');
-      li.innerHTML = `<span class="standup-item-id">${escHtml(item.id)}</span>` +
-        `<span class="standup-item-desc">${descHtml(item.description, item.githubUrl)}</span>`;
+      li.innerHTML = `<span class="standup-item-desc">${descWithRefHtml(item.description)}</span>`;
       ul.appendChild(li);
     }
     blSection.appendChild(ul);
@@ -1460,14 +1477,110 @@ function renderStandupReport(report) {
   return root;
 }
 
+// Simple markdown renderer for Claude standup output
+function inlineMarkdown(text) {
+  const parts = [];
+  let i = 0;
+  let plain = '';
+
+  while (i < text.length) {
+    if (text[i] === '[') {
+      const closeB = text.indexOf(']', i);
+      if (closeB !== -1 && text[closeB + 1] === '(') {
+        const closeP = text.indexOf(')', closeB + 2);
+        if (closeP !== -1) {
+          if (plain) { parts.push(escHtml(plain)); plain = ''; }
+          const linkText = text.slice(i + 1, closeB);
+          const url = text.slice(closeB + 2, closeP);
+          parts.push(`<a href="${escHtml(url)}" target="_blank" rel="noopener">${escHtml(linkText)}</a>`);
+          i = closeP + 1;
+          continue;
+        }
+      }
+    }
+    if (text.slice(i, i + 2) === '**') {
+      const end = text.indexOf('**', i + 2);
+      if (end !== -1) {
+        if (plain) { parts.push(escHtml(plain)); plain = ''; }
+        parts.push(`<strong>${escHtml(text.slice(i + 2, end))}</strong>`);
+        i = end + 2;
+        continue;
+      }
+    }
+    if (text[i] === '*' && text[i - 1] !== '*' && text[i + 1] !== '*') {
+      const end = text.indexOf('*', i + 1);
+      if (end !== -1 && text[end - 1] !== '*' && text[end + 1] !== '*') {
+        if (plain) { parts.push(escHtml(plain)); plain = ''; }
+        parts.push(`<em>${escHtml(text.slice(i + 1, end))}</em>`);
+        i = end + 1;
+        continue;
+      }
+    }
+    plain += text[i];
+    i++;
+  }
+  if (plain) parts.push(escHtml(plain));
+  return parts.join('');
+}
+
+function renderSimpleMarkdown(text) {
+  const lines = text.split('\n');
+  const blocks = [];
+  let listItems = [];
+  let paraLines = [];
+
+  function flushList() {
+    if (listItems.length === 0) return;
+    blocks.push('<ul class="standup-md-list">' + listItems.map(i => `<li>${i}</li>`).join('') + '</ul>');
+    listItems = [];
+  }
+
+  function flushPara() {
+    if (paraLines.length === 0) return;
+    const content = paraLines.join(' ').trim();
+    if (content) blocks.push(`<p>${inlineMarkdown(content)}</p>`);
+    paraLines = [];
+  }
+
+  for (const line of lines) {
+    const hMatch = line.match(/^(#{1,3})\s+(.+)/);
+    if (hMatch) {
+      flushList(); flushPara();
+      const level = hMatch[1].length;
+      blocks.push(`<h${level} class="standup-md-h">${inlineMarkdown(hMatch[2])}</h${level}>`);
+      continue;
+    }
+    const listMatch = line.match(/^[•\-\*]\s+(.*)/);
+    if (listMatch) {
+      flushPara();
+      listItems.push(inlineMarkdown(listMatch[1]));
+      continue;
+    }
+    if (line.trim() === '') {
+      flushList(); flushPara();
+      continue;
+    }
+    flushList();
+    paraLines.push(line);
+  }
+  flushList(); flushPara();
+  return blocks.join('\n');
+}
+
+let standupClaudeRawOutput = '';
+
 async function generateStandupWithClaude() {
   const output = document.getElementById('standup-claude-output');
+  const rendered = document.getElementById('standup-claude-rendered');
   const spinner = document.getElementById('standup-claude-spinner');
   const btn = document.getElementById('standup-claude-generate');
 
+  standupClaudeRawOutput = '';
   output.textContent = '';
-  output.classList.add('hidden');
+  output.classList.remove('hidden');
   output.classList.remove('claude-error');
+  rendered.classList.add('hidden');
+  rendered.innerHTML = '';
   spinner.classList.remove('hidden');
   btn.disabled = true;
 
@@ -1475,7 +1588,6 @@ async function generateStandupWithClaude() {
     const res = await fetch('/api/standup/claude', { method: 'POST' });
     if (!res.ok) {
       spinner.classList.add('hidden');
-      output.classList.remove('hidden');
       output.classList.add('claude-error');
       output.textContent = 'Error: ' + (await res.text());
       btn.disabled = false;
@@ -1483,7 +1595,6 @@ async function generateStandupWithClaude() {
     // Output streams via WebSocket standup-status messages
   } catch (err) {
     spinner.classList.add('hidden');
-    output.classList.remove('hidden');
     output.classList.add('claude-error');
     output.textContent = 'Error: ' + err.message;
     btn.disabled = false;
@@ -1492,6 +1603,7 @@ async function generateStandupWithClaude() {
 
 function handleStandupStatus(data) {
   const output = document.getElementById('standup-claude-output');
+  const rendered = document.getElementById('standup-claude-rendered');
   const spinner = document.getElementById('standup-claude-spinner');
   const spinnerLabel = document.getElementById('standup-claude-spinner-label');
   const btn = document.getElementById('standup-claude-generate');
@@ -1502,16 +1614,21 @@ function handleStandupStatus(data) {
       spinnerLabel.textContent = label + '...';
     }
     if (data.output) {
-      output.classList.remove('hidden');
-      output.textContent += data.output;
+      standupClaudeRawOutput += data.output;
+      output.textContent = standupClaudeRawOutput;
       output.scrollTop = output.scrollHeight;
     }
   } else if (data.status === 'done') {
     spinner.classList.add('hidden');
     btn.disabled = false;
+    // Switch from raw pre to rendered markdown
+    if (standupClaudeRawOutput.trim()) {
+      rendered.innerHTML = renderSimpleMarkdown(standupClaudeRawOutput);
+      rendered.classList.remove('hidden');
+      output.classList.add('hidden');
+    }
   } else if (data.status === 'error') {
     spinner.classList.add('hidden');
-    output.classList.remove('hidden');
     output.classList.add('claude-error');
     output.textContent += (output.textContent ? '\n' : '') + 'Error: ' + data.output;
     btn.disabled = false;
