@@ -1962,3 +1962,83 @@ tbody tr {
   font-size: 13px;
   text-align: center;
 }
+
+/* Focus timer bar */
+.focus-timer-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  font-size: 13px;
+  animation: slide-down 0.2s ease;
+  transition: background 0.5s;
+}
+.focus-timer-bar.hidden { display: none; }
+.focus-timer-bar.timer-urgent {
+  background: color-mix(in srgb, var(--p0) 15%, var(--bg));
+  border-bottom-color: color-mix(in srgb, var(--p0) 40%, var(--border));
+  animation: urgent-pulse 1s ease-in-out infinite;
+}
+@keyframes urgent-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.85; }
+}
+
+.timer-icon { font-size: 16px; flex-shrink: 0; }
+.timer-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.timer-countdown { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); flex-shrink: 0; min-width: 48px; text-align: right; }
+.focus-timer-bar.timer-urgent .timer-countdown { color: var(--p0); }
+
+.timer-progress-track {
+  width: 80px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.timer-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.5s linear;
+}
+.focus-timer-bar.timer-urgent .timer-progress-fill { background: var(--p0); }
+
+.timer-stop {
+  font-size: 14px;
+  color: var(--muted);
+  flex-shrink: 0;
+  padding: 0 2px;
+}
+.timer-stop:hover { color: var(--fg); }
+
+/* Timer button in row */
+.timer-btn { opacity: 0.4; transition: opacity 0.15s; }
+.timer-btn:hover, .timer-btn.timer-active { opacity: 1; }
+.timer-btn.timer-active { filter: none; }
+
+/* Timer picker popover */
+.timer-picker {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px var(--shadow);
+  z-index: 900;
+  min-width: 200px;
+}
+.timer-picker-title {
+  font-size: 12px;
+  color: var(--fg-secondary);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+.timer-picker-title strong { color: var(--fg); }
+.timer-picker-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
