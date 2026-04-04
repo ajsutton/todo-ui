@@ -18,6 +18,7 @@ import { pushUndo } from './undo.js';
 import { showContextMenu } from './contextmenu.js';
 import { applyDensity } from './density.js';
 import { applyColumnVisibility } from './columns.js';
+import { renderReactionBadges, showReactionPicker, hasReactions } from './reactions.js';
 import { hasNote, getNote, showNoteEditor } from './notes.js';
 
 // Stale IDs maintained across renders
@@ -324,6 +325,21 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
     input.addEventListener('click', (e) => e.stopPropagation());
   });
   tdDesc.appendChild(descSpan);
+
+  // Emoji reaction badges
+  const reactionBadges = renderReactionBadges(item.id, () => import('./render.js').then(m => m.renderTable()));
+  if (reactionBadges) tdDesc.appendChild(reactionBadges);
+
+  // Reaction add button (shown on hover via CSS)
+  const reactionBtn = document.createElement('span');
+  reactionBtn.className = 'reaction-add-btn';
+  reactionBtn.textContent = '😊';
+  reactionBtn.title = 'Add reaction';
+  reactionBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    showReactionPicker(reactionBtn, item.id, () => import('./render.js').then(m => m.renderTable()));
+  });
+  tdDesc.appendChild(reactionBtn);
 
   // Personal note indicator
   if (hasNote(item.id)) {
