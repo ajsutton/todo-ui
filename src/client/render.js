@@ -10,9 +10,15 @@ import { computeUrgency, urgencyColor } from './urgency.js';
 import { recordSnapshot, renderSparkline } from './history.js';
 import { renderTimerBtn, showTimerPicker, getTimerItemId } from './timer.js';
 import { isGroupByMode, groupItems, buildGroupHeaderRow, isGroupCollapsed } from './groupby.js';
+import { pushUndo } from './undo.js';
 
 // Stale IDs maintained across renders
 let staleIds = new Set();
+
+function truncateDesc(item) {
+  const d = item.description || item.id;
+  return d.length > 40 ? d.slice(0, 39) + '…' : d;
+}
 
 // Lazy-loaded to avoid circular dependency (detail.js imports render.js indirectly)
 function getShowDetail() {
@@ -225,14 +231,15 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
   toggleBtn.className = 'btn-small';
   toggleBtn.onclick = (e) => {
     e.stopPropagation();
-    // Import actions dynamically to avoid circular dependency concerns
     import('./actions.js').then(({ markComplete, markIncomplete }) => {
       if (isDone) {
         markIncomplete(item.id);
+        pushUndo(`Marked "${truncateDesc(item)}" active`, () => markComplete(item.id));
       } else {
         markComplete(item.id).then(() => {
           import('./confetti.js').then(({ triggerConfetti }) => triggerConfetti());
         });
+        pushUndo(`Marked "${truncateDesc(item)}" done`, () => markIncomplete(item.id));
       }
     });
   };
