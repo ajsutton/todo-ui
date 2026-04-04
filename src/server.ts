@@ -7,6 +7,7 @@ import {
   markIncomplete,
   setPriority,
   setDue,
+  setDescription,
   setSubItemPriority,
   refreshPrStatus,
   updateAll,
@@ -379,6 +380,21 @@ const server = Bun.serve({
       try {
         const body = (await req.json()) as { due?: string };
         setDue(watcher.getDir(), id, body.due ?? "");
+        watcher.reload();
+        return jsonResponse({ ok: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return jsonResponse({ error: message }, 400);
+      }
+    }
+
+    if (req.method === "POST" && pathname.startsWith("/api/description/")) {
+      const id = extractIdFromPath(pathname, "/api/description/");
+      if (!id) return jsonResponse({ error: "Missing id" }, 400);
+      try {
+        const body = (await req.json()) as { description?: string };
+        if (!body.description?.trim()) return jsonResponse({ error: "Missing description" }, 400);
+        setDescription(watcher.getDir(), id, body.description.trim());
         watcher.reload();
         return jsonResponse({ ok: true });
       } catch (err) {
