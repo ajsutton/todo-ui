@@ -2238,3 +2238,22 @@ tbody tr {
   font-weight: 600;
 }
 .undo-btn:hover { background: rgba(255,255,255,0.35); }
+
+/* Ambient P0 urgency indicator — subtle left border pulse */
+body.has-p0::before {
+  content: '';
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--p0);
+  opacity: 0.7;
+  animation: p0-pulse 2.5s ease-in-out infinite;
+  z-index: 999;
+  pointer-events: none;
+}
+@keyframes p0-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 0.85; }
+}
