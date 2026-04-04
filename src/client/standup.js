@@ -8,22 +8,17 @@ export async function showStandupDialog() {
   appState.standupReportLoaded = false;
   appState.currentStandupReport = null;
   appState.standupClaudeLoaded = false;
-  dialog.classList.remove('hidden');
+  dialog.show();
   await switchStandupTab('claude');
 }
 
 export function closeStandupDialog() {
-  document.getElementById('standup-dialog').classList.add('hidden');
+  document.getElementById('standup-dialog').hide();
 }
 
 export async function switchStandupTab(tab) {
   appState.activeStandupTab = tab;
-  document.querySelectorAll('#standup-dialog .tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === tab);
-  });
-  document.getElementById('standup-tab-report').classList.toggle('hidden', tab !== 'report');
-  document.getElementById('standup-tab-claude').classList.toggle('hidden', tab !== 'claude');
-
+  // sl-tab-group handles tab UI state; just load content as needed
   if (tab === 'report' && !appState.standupReportLoaded) {
     appState.standupReportLoaded = true;
     await loadStandupReport();

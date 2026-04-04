@@ -129,10 +129,15 @@ function getSyntaxSuggestions(value) {
 }
 
 export function initSearchHistory(inputEl, onSelect) {
-  inputEl.addEventListener('focus', () => {
+  const isSl = inputEl.tagName.toLowerCase() === 'sl-input';
+  const focusEvt = isSl ? 'sl-focus' : 'focus';
+  const inputEvt = isSl ? 'sl-input' : 'input';
+  const clearEvt = isSl ? 'sl-clear' : 'search';
+
+  inputEl.addEventListener(focusEvt, () => {
     if (!inputEl.value) showDropdown(inputEl, onSelect);
   });
-  inputEl.addEventListener('input', () => {
+  inputEl.addEventListener(inputEvt, () => {
     const val = inputEl.value;
     if (!val) {
       showDropdown(inputEl, onSelect);
@@ -147,8 +152,8 @@ export function initSearchHistory(inputEl, onSelect) {
     }
   });
   // Re-show on clear
-  inputEl.addEventListener('search', () => {
-    if (!inputEl.value) setTimeout(() => showDropdown(inputEl, onSelect), 50);
+  inputEl.addEventListener(clearEvt, () => {
+    setTimeout(() => showDropdown(inputEl, onSelect), 50);
   });
 }
 

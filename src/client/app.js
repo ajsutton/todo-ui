@@ -1,4 +1,15 @@
 // Entry point — wires up all modules on DOMContentLoaded
+import { setBasePath } from '@shoelace-style/shoelace/dist/utilities/base-path.js';
+import '@shoelace-style/shoelace/dist/components/button/button.js';
+import '@shoelace-style/shoelace/dist/components/select/select.js';
+import '@shoelace-style/shoelace/dist/components/option/option.js';
+import '@shoelace-style/shoelace/dist/components/input/input.js';
+import '@shoelace-style/shoelace/dist/components/dialog/dialog.js';
+import '@shoelace-style/shoelace/dist/components/tab-group/tab-group.js';
+import '@shoelace-style/shoelace/dist/components/tab/tab.js';
+import '@shoelace-style/shoelace/dist/components/tab-panel/tab-panel.js';
+setBasePath('/sl/');
+
 import { appState } from './state.js';
 import { syncUrl } from './url.js';
 import { renderTable, fetchLastUpdateTime, setLastUpdate } from './render.js';
@@ -26,13 +37,10 @@ function showUpdateDialog(results, discovered, errors) {
   const dialog = document.getElementById('update-dialog');
   const content = document.getElementById('update-dialog-content');
   const actions = document.getElementById('update-dialog-actions');
-  const title = document.getElementById('update-dialog-title');
   content.innerHTML = '';
 
   const hasChanges = results.length > 0;
   const hasDiscovered = discovered.length > 0;
-
-  title.textContent = 'Update Results';
 
   if (hasChanges) {
     const section = document.createElement('div');
@@ -141,19 +149,22 @@ function showUpdateDialog(results, discovered, errors) {
   }
 
   actions.classList.add('hidden');
+  // Show close footer, hide actions footer
+  const closeFtr = document.getElementById('update-dialog-close-footer');
+  if (closeFtr) closeFtr.style.display = '';
   dialog._discovered = [];
-  dialog.classList.remove('hidden');
+  dialog.show();
 }
 
 function closeUpdateDialog() {
-  document.getElementById('update-dialog').classList.add('hidden');
+  document.getElementById('update-dialog').hide();
 }
 
 async function refreshAll() {
   const btn = document.getElementById('refresh-all');
   const progress = document.getElementById('update-progress');
   const fill = document.getElementById('progress-fill');
-  btn.classList.add('loading');
+  btn.setAttribute('loading', '');
   btn.disabled = true;
   fill.style.width = '0%';
   progress.classList.remove('hidden');
@@ -167,7 +178,7 @@ async function refreshAll() {
     console.error('Failed to update all:', err);
     alert('Update failed: ' + (err.message || err));
   } finally {
-    btn.classList.remove('loading');
+    btn.removeAttribute('loading');
     btn.disabled = false;
     progress.classList.add('hidden');
   }
@@ -245,8 +256,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Restore filter dropdowns from URL state
   document.getElementById('filter-search').value = appState.searchQuery;
-  document.getElementById('filter-type').value = appState.filterType;
-  document.getElementById('filter-status').value = appState.filterStatus;
+  // sl-select value must be set after element is defined
+  const typeEl = document.getElementById('filter-type');
+  const statusEl = document.getElementById('filter-status');
+  customElements.whenDefined('sl-select').then(() => {
+    typeEl.value = appState.filterType;
+    statusEl.value = appState.filterStatus || 'active';
+  });
 
   // Set initial sort indicator
   updateSortIndicators();
@@ -258,10 +274,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Filters
   const searchEl = document.getElementById('filter-search');
-  searchEl.oninput = (e) => {
-    appState.searchQuery = e.target.value;
+  searchEl.addEventListener('sl-input', () => {
+    appState.searchQuery = searchEl.value;
+    syncQuickFilterChips();
     renderTable();
-  };
+  });
+  searchEl.addEventListener('sl-clear', () => {
+    appState.searchQuery = '';
+    syncQuickFilterChips();
+    syncUrl();
+    renderTable();
+  });
   searchEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && searchEl.value.trim().length >= 2) {
       recordSearch(searchEl.value.trim());
@@ -275,14 +298,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.dispatchEvent(new Event('search-changed'));
     renderTable();
   });
-  document.getElementById('filter-type').onchange = (e) => {
+  document.getElementById('filter-type').addEventListener('sl-change', (e) => {
     appState.filterType = e.target.value;
     renderTable();
-  };
-  document.getElementById('filter-status').onchange = (e) => {
+  });
+  document.getElementById('filter-status').addEventListener('sl-change', (e) => {
     appState.filterStatus = e.target.value;
     renderTable();
-  };
+  });
 
   // Quick filter chips
   function syncQuickFilterChips() {
@@ -300,39 +323,28 @@ document.addEventListener('DOMContentLoaded', () => {
       renderTable();
     });
   });
-  // Keep chips in sync when search changes via text input
-  const _origSearchInput = searchEl.oninput;
-  searchEl.oninput = (e) => {
-    appState.searchQuery = e.target.value;
-    syncQuickFilterChips();
-    renderTable();
-  };
   // Initial chip sync on load and when search is changed externally (e.g. preset apply)
   syncQuickFilterChips();
   document.addEventListener('search-changed', syncQuickFilterChips);
 
   // Update log
   document.getElementById('show-log').onclick = (e) => { e.preventDefault(); showLogDialog(); };
-  document.getElementById('log-dialog-close').onclick = closeLogDialog;
   document.getElementById('log-close-btn').onclick = closeLogDialog;
   document.getElementById('log-load-more').onclick = () => loadLogPage(false);
 
   // Standup dialog
-  document.getElementById('show-standup').onclick = () => showStandupDialog();
-  document.getElementById('standup-dialog-close').onclick = closeStandupDialog;
+  document.getElementById('show-standup').addEventListener('click', () => showStandupDialog());
   document.getElementById('standup-close-btn').onclick = closeStandupDialog;
   document.getElementById('standup-copy-btn').onclick = copyStandupReport;
-  document.getElementById('standup-claude-generate').onclick = generateStandupWithClaude;
-  document.querySelectorAll('#standup-dialog .tab-btn').forEach(btn => {
-    btn.onclick = () => switchStandupTab(btn.dataset.tab);
-  });
+  document.getElementById('standup-claude-generate').addEventListener('click', generateStandupWithClaude);
+  document.getElementById('standup-tab-group')?.addEventListener('sl-tab-show', (e) => switchStandupTab(e.detail.name));
 
   // Refresh/update all
-  document.getElementById('refresh-all').onclick = refreshAll;
+  document.getElementById('refresh-all').addEventListener('click', refreshAll);
 
   // Update dialog
   document.getElementById('discovery-skip').onclick = closeUpdateDialog;
-  document.getElementById('update-dialog-close').onclick = closeUpdateDialog;
+  document.getElementById('update-dialog-close-btn').onclick = closeUpdateDialog;
   document.getElementById('discovery-add').onclick = closeUpdateDialog;
 
   // Claude prompt
@@ -396,8 +408,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Group-by select
   const groupbySelect = document.getElementById('groupby-select');
   if (groupbySelect) {
-    groupbySelect.value = appState.groupByMode || '';
-    groupbySelect.addEventListener('change', () => {
+    customElements.whenDefined('sl-select').then(() => {
+      groupbySelect.value = appState.groupByMode || '';
+    });
+    groupbySelect.addEventListener('sl-change', () => {
       appState.groupByMode = groupbySelect.value || false;
       syncUrl();
       renderTable();
@@ -405,7 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Column visibility
-  document.getElementById('columns-btn')?.addEventListener('click', (e) => showColumnPicker(e.currentTarget));
+  document.getElementById('columns-btn')?.addEventListener('click', (e) => showColumnPicker(e.currentTarget ?? e.target));
 
   // Notification toggle
   const notifBtn = document.getElementById('notif-toggle');

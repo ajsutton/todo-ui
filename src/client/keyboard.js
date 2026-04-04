@@ -15,14 +15,16 @@ function isInInput() {
   const el = document.activeElement;
   if (!el) return false;
   const tag = el.tagName.toLowerCase();
-  return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable;
+  return tag === 'input' || tag === 'textarea' || tag === 'select' ||
+    tag === 'sl-input' || tag === 'sl-textarea' || tag === 'sl-select' ||
+    el.isContentEditable;
 }
 
 function isDialogOpen() {
   const dialogs = ['standup-dialog', 'log-dialog', 'update-dialog', 'shortcut-overlay'];
   return dialogs.some(id => {
     const el = document.getElementById(id);
-    return el && !el.classList.contains('hidden');
+    return el && el.open;
   });
 }
 
@@ -118,17 +120,17 @@ function toggleFocusMode() {
 
 export function showShortcutOverlay() {
   const overlay = document.getElementById('shortcut-overlay');
-  if (overlay) overlay.classList.remove('hidden');
+  if (overlay) overlay.show();
 }
 
 export function closeShortcutOverlay() {
   const overlay = document.getElementById('shortcut-overlay');
-  if (overlay) overlay.classList.add('hidden');
+  if (overlay) overlay.hide();
 }
 
 function isShortcutOverlayOpen() {
   const overlay = document.getElementById('shortcut-overlay');
-  return overlay && !overlay.classList.contains('hidden');
+  return overlay && overlay.open;
 }
 
 export function initKeyboard() {
@@ -141,32 +143,12 @@ export function initKeyboard() {
       return;
     }
 
-    // Escape always closes things
+    // Escape always closes things (sl-dialog handles its own Escape; handle detail panel)
     if (e.key === 'Escape') {
-      if (isShortcutOverlayOpen()) {
-        closeShortcutOverlay();
-        return;
-      }
-      const standupDialog = document.getElementById('standup-dialog');
-      if (!standupDialog.classList.contains('hidden')) {
-        standupDialog.classList.add('hidden');
-        return;
-      }
-      const logDialog = document.getElementById('log-dialog');
-      if (!logDialog.classList.contains('hidden')) {
-        logDialog.classList.add('hidden');
-        return;
-      }
-      const updateDialog = document.getElementById('update-dialog');
-      if (!updateDialog.classList.contains('hidden')) {
-        updateDialog.classList.add('hidden');
-        return;
-      }
       const detailPanel = document.getElementById('detail-panel');
       if (detailPanel.classList.contains('visible')) {
         detailPanel.classList.remove('visible');
         syncUrl();
-        return;
       }
       return;
     }

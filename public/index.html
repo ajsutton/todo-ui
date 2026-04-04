@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TODOs</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+  <link rel="stylesheet" href="/sl/themes/light.css">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -18,10 +19,10 @@
       <span id="last-update" class="last-update"></span>
       <button id="notif-toggle" class="btn-icon" title="Enable notifications" aria-label="Enable notifications">🔔</button>
       <button id="show-shortcuts" class="btn-icon" title="Keyboard shortcuts">?</button>
-      <button id="show-standup" class="btn-small">Standup</button>
+      <sl-button id="show-standup" size="small">Standup</sl-button>
       <a id="show-log" href="#" title="Update log">View Log</a>
       <div class="update-action">
-        <button id="refresh-all" class="btn">Update All</button>
+        <sl-button id="refresh-all" variant="primary">Update All</sl-button>
         <div id="update-progress" class="update-progress hidden">
           <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
           <span id="progress-label" class="progress-label"></span>
@@ -31,28 +32,28 @@
   </header>
 
   <div class="filters">
-    <select id="filter-type">
-      <option value="">All Types</option>
-      <option value="Review">Review</option>
-      <option value="PR">PR</option>
-      <option value="Workstream">Workstream</option>
-      <option value="Issue">Issue</option>
-    </select>
-    <select id="filter-status">
-      <option value="">All Statuses</option>
-      <option value="active" selected>Active</option>
-      <option value="done">Done</option>
-    </select>
-    <div class="search-box">
-      <svg class="search-icon" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8.5" cy="8.5" r="5.5"/><line x1="13" y1="13" x2="18" y2="18"/></svg>
-      <input type="search" id="filter-search" autocomplete="off" title="Search: p:0, p:0-2, type:pr, status:failing, blocked, overdue, tag:name, or text">
-    </div>
-    <select id="groupby-select" title="Group items">
-      <option value="">No grouping</option>
-      <option value="priority">Group: Priority</option>
-      <option value="type">Group: Type</option>
-    </select>
-    <button id="columns-btn" class="btn-small" title="Show/hide columns">Columns</button>
+    <sl-select id="filter-type" size="small" placeholder="All Types">
+      <sl-option value="">All Types</sl-option>
+      <sl-option value="Review">Review</sl-option>
+      <sl-option value="PR">PR</sl-option>
+      <sl-option value="Workstream">Workstream</sl-option>
+      <sl-option value="Issue">Issue</sl-option>
+    </sl-select>
+    <sl-select id="filter-status" size="small" value="active">
+      <sl-option value="">All Statuses</sl-option>
+      <sl-option value="active">Active</sl-option>
+      <sl-option value="done">Done</sl-option>
+    </sl-select>
+    <sl-input id="filter-search" size="small" autocomplete="off" clearable
+      title="Search: p:0, p:0-2, type:pr, status:failing, blocked, overdue, tag:name, or text">
+      <svg slot="prefix" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8.5" cy="8.5" r="5.5"/><line x1="13" y1="13" x2="18" y2="18"/></svg>
+    </sl-input>
+    <sl-select id="groupby-select" size="small" placeholder="No grouping" title="Group items">
+      <sl-option value="">No grouping</sl-option>
+      <sl-option value="priority">Group: Priority</sl-option>
+      <sl-option value="type">Group: Type</sl-option>
+    </sl-select>
+    <sl-button id="columns-btn" size="small" title="Show/hide columns">Columns</sl-button>
   </div>
 
   <div id="quick-filters" class="quick-filters" role="toolbar" aria-label="Quick filters">
@@ -108,24 +109,21 @@
     </div>
   </div>
 
-  <div id="update-dialog" class="dialog-overlay hidden">
-    <div class="dialog">
-      <div class="dialog-header">
-        <h2 id="update-dialog-title">Update Results</h2>
-        <button id="update-dialog-close" class="btn-icon">&times;</button>
-      </div>
-      <div id="update-dialog-content"></div>
-      <div id="update-dialog-actions" class="dialog-actions hidden">
-        <label class="select-all-label">
-          <input type="checkbox" id="discovery-select-all" checked> Select all
-        </label>
-        <div class="dialog-buttons">
-          <button id="discovery-skip" class="btn-small">Skip</button>
-          <button id="discovery-add" class="btn">Add Selected</button>
-        </div>
+  <sl-dialog id="update-dialog" label="Update Results">
+    <div id="update-dialog-content"></div>
+    <div id="update-dialog-actions" class="dialog-actions hidden" slot="footer">
+      <label class="select-all-label">
+        <input type="checkbox" id="discovery-select-all" checked> Select all
+      </label>
+      <div class="dialog-buttons">
+        <sl-button id="discovery-skip" size="small" variant="neutral">Skip</sl-button>
+        <sl-button id="discovery-add" variant="primary">Add Selected</sl-button>
       </div>
     </div>
-  </div>
+    <div slot="footer" id="update-dialog-close-footer" class="dialog-buttons">
+      <sl-button id="update-dialog-close-btn" size="small">Close</sl-button>
+    </div>
+  </sl-dialog>
 
   <div id="claude-panel" class="claude-panel">
     <div class="claude-input-row">
@@ -136,85 +134,68 @@
     <pre id="claude-output" class="hidden"></pre>
   </div>
 
-  <div id="log-dialog" class="dialog-overlay hidden">
-    <div class="dialog dialog-wide">
-      <div class="dialog-header">
-        <h2>Update Log</h2>
-        <button id="log-dialog-close" class="btn-icon">&times;</button>
-      </div>
-      <div id="log-dialog-content" class="log-content"></div>
-      <div class="dialog-actions">
-        <div class="dialog-buttons">
-          <button id="log-load-more" class="btn-small hidden">Load more</button>
-          <button id="log-close-btn" class="btn-small">Close</button>
-        </div>
-      </div>
+  <sl-dialog id="log-dialog" label="Update Log" class="dialog-wide">
+    <div id="log-dialog-content" class="log-content"></div>
+    <div slot="footer" class="dialog-buttons">
+      <sl-button id="log-load-more" size="small" class="hidden">Load more</sl-button>
+      <sl-button id="log-close-btn" size="small">Close</sl-button>
     </div>
-  </div>
+  </sl-dialog>
 
-  <div id="standup-dialog" class="dialog-overlay hidden">
-    <div class="dialog dialog-wide">
-      <div class="dialog-header">
-        <h2>Daily Standup</h2>
-        <button id="standup-dialog-close" class="btn-icon">&times;</button>
-      </div>
-      <div class="tab-bar">
-        <button class="tab-btn" data-tab="report">Report</button>
-        <button class="tab-btn active" data-tab="claude">Claude</button>
-      </div>
-      <div id="standup-tab-report" class="tab-content standup-content hidden"></div>
-      <div id="standup-tab-claude" class="tab-content standup-content">
-        <div class="standup-claude-actions">
-          <button id="standup-claude-generate" class="btn btn-small hidden">Regenerate</button>
-          <div id="standup-claude-spinner" class="claude-spinner hidden"><span class="spinner"></span> <span id="standup-claude-spinner-label">Thinking...</span></div>
-          <span id="standup-claude-generated-at" class="standup-generated-at hidden"></span>
-        </div>
-        <pre id="standup-claude-output" class="standup-claude-output hidden"></pre>
-        <div id="standup-claude-rendered" class="standup-claude-rendered hidden"></div>
-      </div>
-      <div class="dialog-actions">
-        <div class="dialog-buttons">
-          <button id="standup-copy-btn" class="btn-small">Copy</button>
-          <button id="standup-close-btn" class="btn-small">Close</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  <sl-dialog id="standup-dialog" label="Daily Standup" class="dialog-wide">
+    <sl-tab-group id="standup-tab-group">
+      <sl-tab slot="nav" panel="report">Report</sl-tab>
+      <sl-tab slot="nav" panel="claude" active>Claude</sl-tab>
 
-  <div id="shortcut-overlay" class="dialog-overlay hidden">
-    <div class="dialog">
-      <div class="dialog-header">
-        <h2>Keyboard Shortcuts</h2>
-        <button id="shortcut-overlay-close" class="btn-icon">&times;</button>
-      </div>
-      <table class="shortcut-table">
-        <tbody>
-          <tr><td><kbd class="shortcut-key">j</kbd> / <kbd class="shortcut-key">↓</kbd></td><td>Select next row</td></tr>
-          <tr><td><kbd class="shortcut-key">k</kbd> / <kbd class="shortcut-key">↑</kbd></td><td>Select previous row</td></tr>
-          <tr><td><kbd class="shortcut-key">Enter</kbd> / <kbd class="shortcut-key">o</kbd></td><td>Open detail panel</td></tr>
-          <tr><td><kbd class="shortcut-key">d</kbd></td><td>Mark selected done/undone</td></tr>
-          <tr><td><kbd class="shortcut-key">p</kbd></td><td>Set priority on selected row</td></tr>
-          <tr><td><kbd class="shortcut-key">s</kbd></td><td>Snooze / unsnooze selected row (until tomorrow)</td></tr>
-          <tr><td><kbd class="shortcut-key">u</kbd></td><td>Set due date on selected row</td></tr>
-          <tr><td><kbd class="shortcut-key">Shift+N</kbd></td><td>Add/edit personal note on selected row</td></tr>
-          <tr><td><kbd class="shortcut-key">t</kbd></td><td>Set type on selected row</td></tr>
-          <tr><td><kbd class="shortcut-key">Ctrl+Z</kbd></td><td>Undo last reversible action</td></tr>
-          <tr><td><kbd class="shortcut-key">+</kbd> / <kbd class="shortcut-key">-</kbd></td><td>Bump due date forward/back one day</td></tr>
-          <tr><td><kbd class="shortcut-key">e</kbd></td><td>Edit detail panel</td></tr>
-          <tr><td><kbd class="shortcut-key">g</kbd></td><td>Open GitHub link</td></tr>
-          <tr><td><kbd class="shortcut-key">r</kbd></td><td>Refresh PR status</td></tr>
-          <tr><td><kbd class="shortcut-key">/</kbd></td><td>Focus search</td></tr>
-          <tr><td><kbd class="shortcut-key">n</kbd></td><td>Add new item</td></tr>
-          <tr><td><kbd class="shortcut-key">c</kbd></td><td>Copy item ID to clipboard</td></tr>
-          <tr><td><kbd class="shortcut-key">w</kbd></td><td>Week view (due dates this week)</td></tr>
-          <tr><td><kbd class="shortcut-key">f</kbd></td><td>Toggle focus mode (P0/P1 only)</td></tr>
-          <tr><td><kbd class="shortcut-key">?</kbd></td><td>Show/hide this overlay</td></tr>
-          <tr><td><kbd class="shortcut-key">⌘K</kbd> / <kbd class="shortcut-key">Ctrl+K</kbd></td><td>Open command palette</td></tr>
-          <tr><td><kbd class="shortcut-key">Esc</kbd></td><td>Close overlay/dialog/panel</td></tr>
-        </tbody>
-      </table>
+      <sl-tab-panel name="report">
+        <div id="standup-tab-report" class="standup-content"></div>
+      </sl-tab-panel>
+      <sl-tab-panel name="claude">
+        <div id="standup-tab-claude" class="standup-content">
+          <div class="standup-claude-actions">
+            <sl-button id="standup-claude-generate" size="small" class="hidden">Regenerate</sl-button>
+            <div id="standup-claude-spinner" class="claude-spinner hidden"><span class="spinner"></span> <span id="standup-claude-spinner-label">Thinking...</span></div>
+            <span id="standup-claude-generated-at" class="standup-generated-at hidden"></span>
+          </div>
+          <pre id="standup-claude-output" class="standup-claude-output hidden"></pre>
+          <div id="standup-claude-rendered" class="standup-claude-rendered hidden"></div>
+        </div>
+      </sl-tab-panel>
+    </sl-tab-group>
+    <div slot="footer" class="dialog-buttons">
+      <sl-button id="standup-copy-btn" size="small">Copy</sl-button>
+      <sl-button id="standup-close-btn" size="small">Close</sl-button>
     </div>
-  </div>
+  </sl-dialog>
+
+  <sl-dialog id="shortcut-overlay" label="Keyboard Shortcuts">
+    <table class="shortcut-table">
+      <tbody>
+        <tr><td><kbd class="shortcut-key">j</kbd> / <kbd class="shortcut-key">↓</kbd></td><td>Select next row</td></tr>
+        <tr><td><kbd class="shortcut-key">k</kbd> / <kbd class="shortcut-key">↑</kbd></td><td>Select previous row</td></tr>
+        <tr><td><kbd class="shortcut-key">Enter</kbd> / <kbd class="shortcut-key">o</kbd></td><td>Open detail panel</td></tr>
+        <tr><td><kbd class="shortcut-key">d</kbd></td><td>Mark selected done/undone</td></tr>
+        <tr><td><kbd class="shortcut-key">p</kbd></td><td>Set priority on selected row</td></tr>
+        <tr><td><kbd class="shortcut-key">s</kbd></td><td>Snooze / unsnooze selected row (until tomorrow)</td></tr>
+        <tr><td><kbd class="shortcut-key">u</kbd></td><td>Set due date on selected row</td></tr>
+        <tr><td><kbd class="shortcut-key">Shift+N</kbd></td><td>Add/edit personal note on selected row</td></tr>
+        <tr><td><kbd class="shortcut-key">t</kbd></td><td>Set type on selected row</td></tr>
+        <tr><td><kbd class="shortcut-key">Ctrl+Z</kbd></td><td>Undo last reversible action</td></tr>
+        <tr><td><kbd class="shortcut-key">+</kbd> / <kbd class="shortcut-key">-</kbd></td><td>Bump due date forward/back one day</td></tr>
+        <tr><td><kbd class="shortcut-key">e</kbd></td><td>Edit detail panel</td></tr>
+        <tr><td><kbd class="shortcut-key">g</kbd></td><td>Open GitHub link</td></tr>
+        <tr><td><kbd class="shortcut-key">r</kbd></td><td>Refresh PR status</td></tr>
+        <tr><td><kbd class="shortcut-key">/</kbd></td><td>Focus search</td></tr>
+        <tr><td><kbd class="shortcut-key">n</kbd></td><td>Add new item</td></tr>
+        <tr><td><kbd class="shortcut-key">c</kbd></td><td>Copy item ID to clipboard</td></tr>
+        <tr><td><kbd class="shortcut-key">w</kbd></td><td>Week view (due dates this week)</td></tr>
+        <tr><td><kbd class="shortcut-key">f</kbd></td><td>Toggle focus mode (P0/P1 only)</td></tr>
+        <tr><td><kbd class="shortcut-key">?</kbd></td><td>Show/hide this overlay</td></tr>
+        <tr><td><kbd class="shortcut-key">⌘K</kbd> / <kbd class="shortcut-key">Ctrl+K</kbd></td><td>Open command palette</td></tr>
+        <tr><td><kbd class="shortcut-key">Esc</kbd></td><td>Close overlay/dialog/panel</td></tr>
+      </tbody>
+    </table>
+  </sl-dialog>
 
   <script src="/app.js"></script>
 </body>

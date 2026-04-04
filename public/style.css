@@ -1,3 +1,23 @@
+/* Shoelace design token overrides */
+:root {
+  --sl-color-primary-50: #eff6ff;
+  --sl-color-primary-100: #dbeafe;
+  --sl-color-primary-200: #bfdbfe;
+  --sl-color-primary-300: #93c5fd;
+  --sl-color-primary-400: #60a5fa;
+  --sl-color-primary-500: #3b82f6;
+  --sl-color-primary-600: #2563eb;
+  --sl-color-primary-700: #1d4ed8;
+  --sl-color-primary-800: #1e40af;
+  --sl-color-primary-900: #1e3a8a;
+  --sl-color-primary-950: #172554;
+  --sl-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --sl-border-radius-medium: 6px;
+  --sl-border-radius-small: 4px;
+  --sl-input-height-small: 28px;
+  --sl-input-height-medium: 34px;
+}
+
 /* Custom properties — auto dark/light theming */
 :root {
   --bg: #ffffff;
@@ -3254,4 +3274,113 @@ tr:hover .reaction-add-btn:hover { opacity: 1; }
   color: var(--fg);
   line-height: 10px;
   z-index: 1;
+}
+
+/* ─── Shoelace component overrides ────────────────────────────────────────── */
+
+/* Filters row: align sl-select, sl-input with the row */
+.filters sl-select,
+.filters sl-input {
+  min-width: 130px;
+}
+.filters sl-input {
+  flex: 1;
+  min-width: 180px;
+}
+
+/* sl-button base */
+sl-button::part(base) {
+  font-family: var(--sl-font-sans);
+  font-size: 13px;
+  border-radius: var(--sl-border-radius-small);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+/* sl-button variant=neutral matches our btn-small */
+sl-button[variant="neutral"]::part(base),
+sl-button:not([variant])::part(base) {
+  background: var(--bg-secondary);
+  color: var(--fg);
+  border-color: var(--border);
+}
+sl-button[variant="neutral"]::part(base):hover,
+sl-button:not([variant])::part(base):hover {
+  background: var(--table-hover);
+}
+
+/* sl-select */
+sl-select::part(combobox) {
+  background: var(--input-bg);
+  color: var(--fg);
+  border-color: var(--input-border);
+  font-size: 13px;
+}
+sl-select::part(listbox) {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+  color: var(--fg);
+}
+
+/* sl-input */
+sl-input::part(base) {
+  background: var(--input-bg);
+  border-color: var(--input-border);
+  color: var(--fg);
+  font-size: 13px;
+}
+sl-input::part(input) {
+  color: var(--fg);
+}
+
+/* sl-dialog */
+sl-dialog::part(panel) {
+  background: var(--panel-bg);
+  color: var(--fg);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px var(--shadow);
+}
+sl-dialog::part(header) {
+  border-bottom: 1px solid var(--border);
+  padding: 16px 20px;
+}
+sl-dialog::part(title) {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg);
+}
+sl-dialog::part(body) {
+  padding: 0;
+}
+sl-dialog::part(footer) {
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+sl-dialog.dialog-wide::part(panel) {
+  max-width: 700px;
+  width: 90vw;
+}
+
+/* sl-tab-group inside standup dialog */
+sl-tab-group::part(base) {
+  display: flex;
+  flex-direction: column;
+}
+sl-tab-group::part(nav) {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+sl-tab::part(base) {
+  color: var(--fg-secondary);
+  font-size: 13px;
+  padding: 8px 16px;
+}
+sl-tab[active]::part(base) {
+  color: var(--accent);
+  font-weight: 600;
+}
+sl-tab-panel::part(base) {
+  padding: 0;
 }

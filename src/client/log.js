@@ -10,7 +10,7 @@ export async function showLogDialog() {
   const dialog = document.getElementById('log-dialog');
   const content = document.getElementById('log-dialog-content');
   content.innerHTML = '<p>Loading...</p>';
-  dialog.classList.remove('hidden');
+  dialog.show();
   await loadLogPage(true);
 }
 
@@ -125,5 +125,5 @@ export function renderLogEntry(entry) {
 }
 
 export function closeLogDialog() {
-  document.getElementById('log-dialog').classList.add('hidden');
+  document.getElementById('log-dialog').hide();
 }
