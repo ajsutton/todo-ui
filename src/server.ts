@@ -145,6 +145,20 @@ async function runAutoUpdate(): Promise<void> {
   }
 }
 
+type WS = Bun.ServerWebSocket<unknown>;
+const clients = new Set<WS>();
+
+function broadcast(msg: WsMessage): void {
+  const payload = JSON.stringify(msg);
+  for (const ws of clients) {
+    try {
+      ws.send(payload);
+    } catch {
+      clients.delete(ws as WS);
+    }
+  }
+}
+
 async function runStandupAutoGeneration(): Promise<void> {
   if (standupAutoGenerating) return;
   standupAutoGenerating = true;
@@ -217,20 +231,6 @@ setTimeout(() => {
   runAutoUpdate();
   setInterval(runAutoUpdate, AUTO_UPDATE_INTERVAL_MS);
 }, firstDelay);
-
-type WS = Bun.ServerWebSocket<unknown>;
-const clients = new Set<WS>();
-
-function broadcast(msg: WsMessage): void {
-  const payload = JSON.stringify(msg);
-  for (const ws of clients) {
-    try {
-      ws.send(payload);
-    } catch {
-      clients.delete(ws as WS);
-    }
-  }
-}
 
 watcher.onStateChange((state) => {
   const detailIds = [...watcher.getDetailIds()];

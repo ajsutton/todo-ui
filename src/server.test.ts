@@ -37,6 +37,8 @@ function randomPort(): number {
   return 10000 + Math.floor(Math.random() * 50000);
 }
 
+const START_TIMEOUT_MS = 30_000;
+
 async function startServer(
   todoDir: string,
   port: number,
@@ -52,21 +54,60 @@ async function startServer(
     stderr: "pipe",
   });
 
-  for (let i = 0; i < 50; i++) {
-    try {
-      const res = await fetch(`http://localhost:${port}/api/state`);
-      if (res.ok) return proc;
-    } catch {
-      // Server not ready yet
+  // Drain stdout continuously in the background to prevent SIGPIPE when the
+  // server writes to stdout after we've detected "listening on".
+  // Resolves when the "listening on" line appears.
+  const ready = new Promise<void>((resolve, reject) => {
+    const reader = proc.stdout!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let resolved = false;
+
+    async function drain() {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            if (!resolved) reject(new Error("Server stdout closed before ready"));
+            return;
+          }
+          buffer += decoder.decode(value, { stream: true });
+          if (!resolved && buffer.includes("listening on")) {
+            resolved = true;
+            resolve();
+            // Keep draining so the pipe stays open and the server won't SIGPIPE
+          }
+        }
+      } catch (e) {
+        if (!resolved) reject(e);
+      } finally {
+        reader.releaseLock();
+      }
     }
-    await new Promise((r) => setTimeout(r, 100));
+
+    drain(); // intentionally not awaited — runs in background
+  });
+
+  const timeout = new Promise<void>((_, reject) =>
+    setTimeout(
+      () => reject(new Error("Server did not start in time")),
+      START_TIMEOUT_MS,
+    ),
+  );
+
+  try {
+    await Promise.race([ready, timeout]);
+  } catch (e) {
+    proc.kill();
+    throw e;
   }
 
-  proc.kill();
-  throw new Error("Server did not start in time");
+  return proc;
 }
 
-describe("server integration", () => {
+const TEST_TIMEOUT_MS = 35_000;
+
+describe("server integration", { timeout: TEST_TIMEOUT_MS }, () => {
   let tmpDir: string;
   let port: number;
   let proc: Subprocess;
@@ -77,12 +118,12 @@ describe("server integration", () => {
     writeFileSync(join(tmpDir, "TODO-1.md"), DETAIL_FIXTURE, "utf-8");
     port = randomPort();
     proc = await startServer(tmpDir, port);
-  });
+  }, TEST_TIMEOUT_MS);
 
   afterEach(() => {
     proc?.kill();
     rmSync(tmpDir, { recursive: true, force: true });
-  });
+  }, TEST_TIMEOUT_MS);
 
   it("GET / serves index.html", async () => {
     const res = await fetch(`http://localhost:${port}/`);
