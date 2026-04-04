@@ -1802,3 +1802,31 @@ tbody tr {
 .status-indicator.disconnected ~ .connection-label {
   color: var(--status-fail);
 }
+
+/* Detail panel metadata badges */
+.detail-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 0 20px 10px;
+  margin-top: -4px;
+}
+
+.dm-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  color: var(--fg-secondary);
+  border: 1px solid var(--border);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.dm-blocked { color: var(--p0); border-color: var(--p0); }
+.dm-overdue { color: var(--status-fail); border-color: var(--status-fail); }
+.dm-today   { color: var(--p1); border-color: var(--p1); }
+.dm-stale   { color: var(--muted); font-style: italic; }
+.dm-link    { color: var(--accent); border-color: var(--accent); text-decoration: none; }
+.dm-link:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }

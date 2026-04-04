@@ -1,6 +1,52 @@
 // Detail panel: show, edit, save
 import { appState } from './state.js';
 import { syncUrl } from './url.js';
+import { staleDays } from './stale.js';
+
+function renderDetailMeta(item) {
+  let metaEl = document.getElementById('detail-meta');
+  if (!metaEl) {
+    metaEl = document.createElement('div');
+    metaEl.id = 'detail-meta';
+    metaEl.className = 'detail-meta';
+    const detailId = document.getElementById('detail-id');
+    if (detailId) detailId.after(metaEl);
+  }
+
+  if (!item) { metaEl.innerHTML = ''; return; }
+
+  const badges = [];
+
+  // Priority
+  badges.push(`<span class="dm-badge priority-${item.priority.toLowerCase()}">${item.priority}</span>`);
+
+  // Type
+  badges.push(`<span class="dm-badge">${item.type}</span>`);
+
+  // Blocked
+  if (item.blocked) badges.push(`<span class="dm-badge dm-blocked">🚫 Blocked</span>`);
+
+  // Due date
+  if (item.due) {
+    const today = new Date().toISOString().slice(0, 10);
+    const cls = item.due < today ? 'dm-overdue' : item.due === today ? 'dm-today' : '';
+    badges.push(`<span class="dm-badge ${cls}" title="${item.due}">Due ${item.due}</span>`);
+  }
+
+  // Stale indicator
+  const days = staleDays(item.id);
+  if (days >= 7) {
+    badges.push(`<span class="dm-badge dm-stale" title="Status unchanged for ${days} days">Stale ${days}d</span>`);
+  }
+
+  // GitHub link
+  if (item.githubUrl) {
+    const ref = (item.repo || '').replace('ethereum-optimism/', '') + (item.prNumber ? '#' + item.prNumber : '');
+    badges.push(`<a href="${item.githubUrl}" target="_blank" rel="noopener" class="dm-badge dm-link" onclick="event.stopPropagation()">${ref || 'GitHub'} ↗</a>`);
+  }
+
+  metaEl.innerHTML = badges.join('');
+}
 
 export async function showDetail(id) {
   const panel = document.getElementById('detail-panel');
@@ -16,6 +62,9 @@ export async function showDetail(id) {
   const desc = item ? item.description.replace(/^\[.*?\]\(.*?\)\s*/, '') : id;
   title.textContent = desc || id;
   document.getElementById('detail-id').textContent = id;
+
+  // Show item metadata badge row
+  renderDetailMeta(item);
   content.innerHTML = '<p>Loading...</p>';
   panel.classList.add('visible');
   syncUrl();
