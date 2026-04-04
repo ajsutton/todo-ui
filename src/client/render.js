@@ -81,7 +81,24 @@ function updateSearchBadge(shown, total) {
   badge.classList.toggle('hidden', !isFiltered || (shown === total && !appState.searchQuery && !appState.filterType));
 }
 
+function renderSkeletonTable() {
+  const tbody = document.getElementById('todo-body');
+  if (!tbody) return;
+  tbody.innerHTML = Array.from({ length: 8 }, () => `
+    <tr class="skeleton-row">
+      <td><span class="skeleton-cell" style="width:60px"></span></td>
+      <td><span class="skeleton-cell" style="width:${180 + Math.random() * 120 | 0}px"></span></td>
+      <td><span class="skeleton-cell" style="width:${80 + Math.random() * 60 | 0}px"></span></td>
+      <td><span class="skeleton-cell" style="width:30px"></span></td>
+      <td><span class="skeleton-cell" style="width:70px"></span></td>
+      <td></td>
+      <td></td>
+    </tr>
+  `).join('');
+}
+
 export function renderTable() {
+  if (!appState.dataLoaded) { renderSkeletonTable(); return; }
   const allItems = [...appState.items];
   const snoozed = getSnoozedIds();
   let items = filterItems(allItems, {
