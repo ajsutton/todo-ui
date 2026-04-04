@@ -2396,6 +2396,7 @@ tbody tr {
 .recents-item:hover { background: var(--table-hover); }
 .recents-pri { font-size: 10px; font-weight: 700; flex-shrink: 0; width: 20px; }
 .recents-desc { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.recents-ago { flex-shrink: 0; font-size: 10px; color: var(--muted); margin-left: 4px; white-space: nowrap; }
 
 /* Tag system */
 .tag-pills-container { display: inline-flex; flex-wrap: wrap; gap: 3px; margin-left: 6px; vertical-align: middle; }
