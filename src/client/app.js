@@ -17,6 +17,7 @@ import { copyExport } from './export.js';
 import { initHoverCards } from './hovercard.js';
 import { initQuickAdd } from './quickadd.js';
 import { initPalette } from './palette.js';
+import { toggleGroupBy, isGroupByMode } from './groupby.js';
 import { initSearchHistory, recordSearch, hideDropdown } from './searchhistory.js';
 
 function showUpdateDialog(results, discovered, errors) {
@@ -352,6 +353,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // "What's next?" suggestion
   document.getElementById('show-next')?.addEventListener('click', showSuggestionBanner);
+
+  // Group-by toggle
+  const groupbyBtn = document.getElementById('groupby-toggle');
+  if (groupbyBtn) {
+    groupbyBtn.addEventListener('click', () => {
+      toggleGroupBy();
+      groupbyBtn.classList.toggle('active', isGroupByMode());
+      renderTable();
+    });
+  }
 
   // Bulk mode
   document.getElementById('bulk-mode-toggle')?.addEventListener('click', toggleBulkMode);

@@ -1,0 +1,95 @@
+// Group-by mode: renders the table with collapsible priority sections
+// instead of a flat sorted list.
+
+import { appState } from './state.js';
+
+const STORAGE_KEY = 'todo-groupby-collapsed';
+
+// Which priority groups are collapsed: Set<string> — lazily loaded on first use
+let _collapsed = null;
+function getCollapsed() {
+  if (_collapsed === null) {
+    try {
+      _collapsed = new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'));
+    } catch {
+      _collapsed = new Set();
+    }
+  }
+  return _collapsed;
+}
+
+function saveCollapsed() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify([...getCollapsed()]));
+}
+
+export function isGroupByMode() {
+  return appState.groupByMode === true;
+}
+
+export function toggleGroupBy() {
+  appState.groupByMode = !appState.groupByMode;
+}
+
+export function isGroupCollapsed(group) {
+  return getCollapsed().has(group);
+}
+
+export function toggleGroupCollapse(group) {
+  const c = getCollapsed();
+  if (c.has(group)) c.delete(group);
+  else c.add(group);
+  saveCollapsed();
+}
+
+// Priority display info
+const PRIORITY_META = {
+  P0: { label: 'P0 — Critical',   color: 'var(--p0)', emoji: '🔴' },
+  P1: { label: 'P1 — High',       color: 'var(--p1)', emoji: '🟠' },
+  P2: { label: 'P2 — Medium',     color: 'var(--p2)', emoji: '🟡' },
+  P3: { label: 'P3 — Normal',     color: 'var(--p3)', emoji: '🔵' },
+  P4: { label: 'P4 — Low',        color: 'var(--p4)', emoji: '⚪' },
+  P5: { label: 'P5 — Someday',    color: 'var(--p5)', emoji: '⬜' },
+};
+const PRIORITY_ORDER = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5'];
+
+export function groupItems(items) {
+  const groups = {};
+  for (const item of items) {
+    const key = item.priority || 'P3';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(item);
+  }
+  // Return in priority order, only non-empty
+  return PRIORITY_ORDER
+    .filter(p => groups[p]?.length)
+    .map(p => ({ key: p, meta: PRIORITY_META[p] || { label: p, color: 'var(--muted)', emoji: '' }, items: groups[p] }));
+}
+
+// Build a group header row element
+export function buildGroupHeaderRow(group, count, colSpan) {
+  const tr = document.createElement('tr');
+  tr.className = 'group-header-row';
+  tr.dataset.groupKey = group.key;
+
+  const td = document.createElement('td');
+  td.colSpan = colSpan;
+  td.className = 'group-header-cell';
+
+  const isCollapsed = getCollapsed().has(group.key);
+  td.innerHTML = `
+    <div class="group-header-inner" style="--group-color: ${group.meta.color}">
+      <span class="group-chevron">${isCollapsed ? '▶' : '▼'}</span>
+      <span class="group-emoji">${group.meta.emoji}</span>
+      <span class="group-label">${group.meta.label}</span>
+      <span class="group-count">${count} ${count === 1 ? 'item' : 'items'}</span>
+    </div>
+  `;
+
+  td.addEventListener('click', () => {
+    toggleGroupCollapse(group.key);
+    import('./render.js').then(m => m.renderTable());
+  });
+
+  tr.appendChild(td);
+  return tr;
+}

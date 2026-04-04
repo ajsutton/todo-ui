@@ -9,6 +9,7 @@ import { selection, isSelectionMode, toggleSelected } from './bulk.js';
 import { computeUrgency, urgencyColor } from './urgency.js';
 import { recordSnapshot, renderSparkline } from './history.js';
 import { renderTimerBtn, showTimerPicker, getTimerItemId } from './timer.js';
+import { isGroupByMode, groupItems, buildGroupHeaderRow, isGroupCollapsed } from './groupby.js';
 
 // Stale IDs maintained across renders
 let staleIds = new Set();
@@ -75,13 +76,14 @@ export function renderTable() {
   // Re-index selected row
   appState.selectedRowIndex = -1;
 
-  for (const item of items) {
+  // Determine column count for group header colspan
+  const colSpan = isSelectionMode() ? 7 : 6;
+
+  function appendItem(item) {
     const hasSubItems = appState.subItemCache.has(item.id);
     const isExpanded = appState.expandedItems.has(item.id);
-
     const tr = buildItemRow(item, { hasSubItems, isExpanded });
     tbody.appendChild(tr);
-
     if (isExpanded && appState.subItemCache.has(item.id)) {
       const subs = appState.subItemCache.get(item.id);
       for (const sub of subs) {
@@ -89,10 +91,21 @@ export function renderTable() {
           filterStatus: appState.filterStatus,
           searchQuery: appState.searchQuery,
         })) continue;
-        const subTr = buildSubItemRow(sub, item.id);
-        tbody.appendChild(subTr);
+        tbody.appendChild(buildSubItemRow(sub, item.id));
       }
     }
+  }
+
+  if (isGroupByMode()) {
+    const groups = groupItems(items);
+    for (const group of groups) {
+      tbody.appendChild(buildGroupHeaderRow(group, group.items.length, colSpan));
+      if (!isGroupCollapsed(group.key)) {
+        for (const item of group.items) appendItem(item);
+      }
+    }
+  } else {
+    for (const item of items) appendItem(item);
   }
 }
 
