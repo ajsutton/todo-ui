@@ -12,6 +12,7 @@ import { renderTimerBtn, showTimerPicker, getTimerItemId } from './timer.js';
 import { isGroupByMode, groupItems, buildGroupHeaderRow, isGroupCollapsed } from './groupby.js';
 import { renderHeatmap } from './heatmap.js';
 import { sortWithPinned, togglePin, isPinned } from './pinned.js';
+import { renderTagPills, showTagPicker } from './tags.js';
 import { getSnoozedIds } from './snooze.js';
 import { pushUndo } from './undo.js';
 
@@ -208,6 +209,16 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
     a.onclick = (e) => e.stopPropagation();
   });
   tdDesc.appendChild(descSpan);
+
+  // Tag pills
+  const tagPillsHtml = renderTagPills(item.id, false);
+  if (tagPillsHtml) {
+    const tagContainer = document.createElement('span');
+    tagContainer.className = 'tag-pills-container';
+    tagContainer.innerHTML = tagPillsHtml;
+    tdDesc.appendChild(tagContainer);
+  }
+
   tr.appendChild(tdDesc);
 
   // Status cell with rich color coding
@@ -297,6 +308,17 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
     };
     actionsWrap.appendChild(refreshBtn);
   }
+
+  // Tag button
+  const tagBtn = document.createElement('button');
+  tagBtn.textContent = '🏷';
+  tagBtn.className = 'btn-small btn-icon-inline tag-btn';
+  tagBtn.title = 'Add/remove tags';
+  tagBtn.onclick = (e) => {
+    e.stopPropagation();
+    showTagPicker(item.id, tagBtn, () => import('./render.js').then(m => m.renderTable()));
+  };
+  actionsWrap.appendChild(tagBtn);
 
   // Pin button
   const pinBtn = document.createElement('button');
