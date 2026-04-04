@@ -2,7 +2,7 @@
 
 /**
  * Parse a search query string into structured filters.
- * Supports: p:0, p:0-2, type:pr, status:failing, blocked, overdue
+ * Supports: p:0, p:0-2, type:pr, status:failing, blocked, overdue, tag:name
  * Remaining terms match description.
  */
 export function parseSearchQuery(query) {
@@ -12,6 +12,7 @@ export function parseSearchQuery(query) {
     priorityMax: null,  // number
     typeFilter: null,   // string
     statusFilter: null, // string
+    tagFilter: null,    // string
     blocked: false,
     overdue: false,
     textTerms: [],
@@ -42,13 +43,18 @@ export function parseSearchQuery(query) {
       result.statusFilter = statusMatch[1];
       continue;
     }
+    const tagMatch = token.match(/^tag:(.+)$/);
+    if (tagMatch) {
+      result.tagFilter = tagMatch[1];
+      continue;
+    }
     result.textTerms.push(token);
   }
 
   return result;
 }
 
-export function filterItems(items, { filterType, filterStatus, searchQuery }) {
+export function filterItems(items, { filterType, filterStatus, searchQuery }, getItemTags) {
   const query = (searchQuery || '').trim();
   const parsed = parseSearchQuery(query);
   const today = new Date().toISOString().slice(0, 10);
@@ -77,6 +83,10 @@ export function filterItems(items, { filterType, filterStatus, searchQuery }) {
     if (parsed.statusFilter) {
       const itemStatus = (item.status || '').toLowerCase();
       if (!itemStatus.includes(parsed.statusFilter)) return false;
+    }
+    if (parsed.tagFilter && getItemTags) {
+      const tags = getItemTags(item.id);
+      if (!tags.includes(parsed.tagFilter)) return false;
     }
 
     // Text terms — must all match description
