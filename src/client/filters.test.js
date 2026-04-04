@@ -513,3 +513,30 @@ describe('filterSubItem', () => {
     expect(filterSubItem(activeSub, { filterStatus: '', searchQuery: 'optimism' })).toBe(true);
   });
 });
+
+// ---- filterItems with notes ----
+
+describe('filterItems with getItemNote', () => {
+  const items = [
+    makeItem({ id: 'TODO-1', description: 'Build feature' }),
+    makeItem({ id: 'TODO-2', description: 'Fix bug' }),
+  ];
+
+  it('finds items by note content when getItemNote is provided', () => {
+    const getNote = (id) => id === 'TODO-1' ? 'waiting on alice review' : '';
+    const result = filterItems(items, { searchQuery: 'alice' }, null, getNote);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('TODO-1');
+  });
+
+  it('does not match note content without getItemNote', () => {
+    const result = filterItems(items, { searchQuery: 'alice' }, null, null);
+    expect(result).toHaveLength(0);
+  });
+
+  it('matches both description and note text', () => {
+    const getNote = (id) => id === 'TODO-1' ? 'alice' : '';
+    const result = filterItems(items, { searchQuery: 'build' }, null, getNote);
+    expect(result).toHaveLength(1); // only description match
+  });
+});

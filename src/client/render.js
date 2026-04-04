@@ -133,7 +133,7 @@ export function renderTable() {
     filterType: appState.filterType,
     filterStatus: appState.filterStatus,
     searchQuery: appState.searchQuery,
-  }, getTagsForItem);
+  }, getTagsForItem, getNote);
   // Hide snoozed items (unless explicitly showing done/all or _showSnoozed toggled)
   if (appState.filterStatus !== 'done' && snoozed.size > 0 && !appState._showSnoozed) {
     items = items.filter(i => !snoozed.has(i.id));
