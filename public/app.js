@@ -1311,78 +1311,123 @@ async function loadStandupReport() {
 function formatReportAsMarkdown(report) {
   const lines = [];
 
-  lines.push(`*Yesterday (${report.yesterdayDate})*`);
+  lines.push(`**Yesterday (${report.yesterdayDate})**`);
+  lines.push('');
 
-  if (report.yesterday.done.length > 0) {
-    lines.push('');
-    lines.push('*Completed*');
-    for (const item of report.yesterday.done) {
-      lines.push(`• ${descWithRefSlack(item.description)}`);
+  // Merge done items, status changes, and GitHub activity into a work-focused list
+  const yesterdayItems = [];
+
+  // Done items — for issues/workstreams with sub-items, group them
+  for (const item of report.yesterday.done) {
+    if (item.subItems && item.subItems.length > 0) {
+      yesterdayItems.push({ text: `Completed ${descWithRefMarkdown(item.description)}`, subItems: item.subItems });
+    } else if (item.type === 'PR') {
+      yesterdayItems.push({ text: `Merged ${descWithRefMarkdown(item.description)}` });
+    } else {
+      yesterdayItems.push({ text: `Completed ${descWithRefMarkdown(item.description)}` });
     }
   }
 
-  if (report.yesterday.statusChanges.length > 0) {
-    lines.push('');
-    lines.push('*Status Changes*');
-    for (const c of report.yesterday.statusChanges) {
-      lines.push(`• ${descWithRefSlack(c.description)} (${c.oldStatus} → ${c.newStatus})`);
-    }
+  // GitHub activity (merged/reviewed PRs not already in done)
+  const doneDescs = new Set(report.yesterday.done.map(d => descText(d.description).toLowerCase()));
+  for (const a of report.yesterday.githubActivity) {
+    if (doneDescs.has(a.title.toLowerCase())) continue;
+    const ref = a.repo.split('/').pop() + '#' + a.url.match(/\/(\d+)$/)?.[1];
+    yesterdayItems.push({ text: `${capitalize(a.action)} [${ref}](${a.url}) ${a.title}` });
   }
 
-  if (report.yesterday.githubActivity.length > 0) {
-    lines.push('');
-    lines.push('*GitHub Activity*');
-    for (const a of report.yesterday.githubActivity) {
-      lines.push(`• ${a.action} <${a.url}|${a.repo}>: ${a.title}`);
-    }
+  // Status changes not already covered
+  const coveredDescs = new Set([...report.yesterday.done.map(d => d.description)]);
+  for (const c of report.yesterday.statusChanges) {
+    if (coveredDescs.has(c.description)) continue;
+    yesterdayItems.push({ text: `${descWithRefMarkdown(c.description)} (${c.oldStatus} → ${c.newStatus})` });
   }
 
-  if (report.yesterday.done.length === 0 && report.yesterday.statusChanges.length === 0 && report.yesterday.githubActivity.length === 0) {
-    lines.push('');
+  if (yesterdayItems.length === 0) {
     lines.push('_Nothing recorded_');
+  } else {
+    for (const item of yesterdayItems) {
+      lines.push(`- ${item.text}`);
+      if (item.subItems) {
+        for (const sub of item.subItems) {
+          const shortRepo = sub.repo.split('/').pop();
+          const kind = sub.githubUrl.includes('/issues/') ? 'issues' : 'pull';
+          const url = `https://github.com/${sub.repo}/${kind}/${sub.number}`;
+          const statusSuffix = sub.status.toLowerCase().includes('merged') ? ' (merged)' : '';
+          lines.push(`  - [${shortRepo}#${sub.number}](${url}) ${sub.title}${statusSuffix}`);
+        }
+      }
+    }
   }
 
   lines.push('');
-  lines.push(`*Today (${report.date})*`);
+  lines.push(`**Today (${report.date})**`);
+  lines.push('');
 
-  if (report.today.highPriority.length > 0) {
-    lines.push('');
-    lines.push('*High Priority*');
-    for (const item of report.today.highPriority) {
-      lines.push(`• ${item.priority} ${descWithRefSlack(item.description)} — ${item.status}`);
+  const todayItems = [];
+
+  for (const item of report.today.highPriority) {
+    const action = actionForType(item.type, item.status);
+    const entry = { text: `${action} ${descWithRefMarkdown(item.description)}`, subItems: item.subItems };
+    todayItems.push(entry);
+  }
+
+  // PRs needing review approval
+  if (report.today.needsReview && report.today.needsReview.length > 0) {
+    for (const item of report.today.needsReview) {
+      // Skip if already in high priority
+      if (todayItems.some(t => t.text.includes(descText(item.description)))) continue;
+      todayItems.push({ text: `**Needs review:** ${descWithRefMarkdown(item.description)}` });
     }
   }
 
-  if (report.today.overdue.length > 0) {
-    lines.push('');
-    lines.push('*Overdue*');
-    for (const item of report.today.overdue) {
-      lines.push(`• ${descWithRefSlack(item.description)} (due ${item.due})`);
-    }
+  for (const item of report.today.overdue) {
+    todayItems.push({ text: `${descWithRefMarkdown(item.description)} _(overdue, due ${item.due})_` });
   }
 
-  if (report.today.dueToday.length > 0) {
-    lines.push('');
-    lines.push('*Due Today*');
-    for (const item of report.today.dueToday) {
-      lines.push(`• ${descWithRefSlack(item.description)}`);
-    }
+  for (const item of report.today.dueToday) {
+    todayItems.push({ text: `${descWithRefMarkdown(item.description)} _(due today)_` });
   }
 
-  if (report.today.blocked.length > 0) {
-    lines.push('');
-    lines.push('*Blocked*');
-    for (const item of report.today.blocked) {
-      lines.push(`• ${descWithRefSlack(item.description)}`);
-    }
+  for (const item of report.today.blocked) {
+    todayItems.push({ text: `**Blocked:** ${descWithRefMarkdown(item.description)}` });
   }
 
-  if (report.today.highPriority.length === 0 && report.today.overdue.length === 0 && report.today.dueToday.length === 0 && report.today.blocked.length === 0) {
-    lines.push('');
+  if (todayItems.length === 0) {
     lines.push('_Nothing high priority_');
+  } else {
+    for (const item of todayItems) {
+      lines.push(`- ${item.text}`);
+      if (item.subItems && item.subItems.length > 0) {
+        for (const sub of item.subItems) {
+          const shortRepo = sub.repo.split('/').pop();
+          const kind = sub.githubUrl.includes('/issues/') ? 'issues' : 'pull';
+          const url = `https://github.com/${sub.repo}/${kind}/${sub.number}`;
+          lines.push(`  - [${shortRepo}#${sub.number}](${url}) ${sub.title} (${sub.status})`);
+        }
+      }
+    }
   }
 
   return lines.join('\n');
+}
+
+function capitalize(s) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function actionForType(type, status) {
+  const s = (status || '').toLowerCase();
+  if (type === 'Review') return 'Review';
+  if (type === 'PR') {
+    if (s.includes('approved')) return 'Merge';
+    if (s.includes('changes requested')) return 'Address feedback on';
+    if (s.includes('draft')) return 'Continue work on';
+    return 'Work on';
+  }
+  if (type === 'Issue') return 'Work on';
+  if (type === 'Workstream') return 'Continue';
+  return 'Work on';
 }
 
 async function copyStandupReport() {
@@ -1435,14 +1480,14 @@ function descWithRefHtml(description) {
   return escHtml(description);
 }
 
-// Format description for Slack: "<url|org/repo#N> rest text"
-function descWithRefSlack(description) {
+// Format description as markdown link: "[org/repo#N](url) rest text"
+function descWithRefMarkdown(description) {
   const match = description.match(/^\[([^\]]+)\]\(([^)]+)\)\s*(.*)/);
   if (match) {
     const ref = match[1];
     const url = match[2];
     const rest = match[3];
-    return `<${url}|${ref}>${rest ? ' ' + rest : ''}`;
+    return `[${ref}](${url})${rest ? ' ' + rest : ''}`;
   }
   return description;
 }
@@ -1568,6 +1613,26 @@ function renderStandupReport(report) {
     hpSection.appendChild(ul);
   }
   tSection.appendChild(hpSection);
+
+  // Needs review
+  if (report.today.needsReview && report.today.needsReview.length > 0) {
+    const nrSection = document.createElement('div');
+    nrSection.className = 'standup-section';
+    const nrTitle = document.createElement('div');
+    nrTitle.className = 'standup-section-title';
+    nrTitle.textContent = 'Awaiting Review';
+    nrSection.appendChild(nrTitle);
+    const ul = document.createElement('ul');
+    ul.className = 'standup-list';
+    for (const item of report.today.needsReview) {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="standup-item-badge">${escHtml(item.priority)}</span>` +
+        `<span class="standup-item-desc">${descWithRefHtml(item.description)}</span>`;
+      ul.appendChild(li);
+    }
+    nrSection.appendChild(ul);
+    tSection.appendChild(nrSection);
+  }
 
   // Overdue
   if (report.today.overdue.length > 0) {

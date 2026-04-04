@@ -406,9 +406,7 @@ const server = Bun.serve({
 
     if (req.method === "POST" && pathname === "/api/standup/claude") {
       try {
-        const state = watcher.getState();
-        const report = await generateStandupReport(watcher.getDir(), state.items);
-        const prompt = buildStandupClaudePrompt(report);
+        const prompt = buildStandupClaudePrompt(watcher.getDir());
         const requestId = crypto.randomUUID();
 
         (async () => {

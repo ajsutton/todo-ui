@@ -1,12 +1,23 @@
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { TodoItem } from "../types.ts";
 import { getLogEntries } from "./update-log.ts";
+import { parseDetailPrRefs } from "./actions.ts";
+
+export interface StandupSubItem {
+  repo: string;
+  number: number;
+  title: string;
+  status: string;
+  githubUrl: string;
+}
 
 export interface StandupDoneItem {
   id: string;
   description: string;
   type: string;
   githubUrl?: string;
+  subItems?: StandupSubItem[];
 }
 
 export interface StandupStatusChange {
@@ -30,6 +41,14 @@ export interface StandupPriorityItem {
   priority: string;
   status: string;
   type: string;
+  githubUrl?: string;
+  subItems?: StandupSubItem[];
+}
+
+export interface StandupNeedsReviewItem {
+  id: string;
+  description: string;
+  priority: string;
   githubUrl?: string;
 }
 
@@ -58,6 +77,7 @@ export interface StandupReport {
   };
   today: {
     highPriority: StandupPriorityItem[];
+    needsReview: StandupNeedsReviewItem[];
     overdue: StandupOverdueItem[];
     dueToday: StandupDueTodayItem[];
     blocked: StandupDoneItem[];
@@ -127,6 +147,20 @@ async function fetchGitHubActivity(ghUser: string, yesterday: string): Promise<S
   return activities;
 }
 
+function getSubItemsForItem(todoDir: string, id: string): StandupSubItem[] {
+  const detailPath = path.join(todoDir, `${id}.md`);
+  if (!existsSync(detailPath)) return [];
+  const content = readFileSync(detailPath, "utf-8");
+  const refs = parseDetailPrRefs(content);
+  return refs.map((r) => ({
+    repo: r.repo,
+    number: r.number,
+    title: r.title,
+    status: r.currentStatus,
+    githubUrl: r.githubUrl,
+  }));
+}
+
 export async function generateStandupReport(todoDir: string, items: TodoItem[]): Promise<StandupReport> {
   const today = dateString(0);
   const yesterday = dateString(-1);
@@ -134,7 +168,13 @@ export async function generateStandupReport(todoDir: string, items: TodoItem[]):
   // Done items (doneDate = yesterday)
   const done: StandupDoneItem[] = items
     .filter((i) => i.doneDate === yesterday)
-    .map((i) => ({ id: i.id, description: i.description, type: i.type, githubUrl: i.githubUrl }));
+    .map((i) => ({
+      id: i.id,
+      description: i.description,
+      type: i.type,
+      githubUrl: i.githubUrl,
+      subItems: getSubItemsForItem(todoDir, i.id),
+    }));
 
   // Status changes from update log entries yesterday
   const { entries } = getLogEntries(todoDir, 200, 0);
@@ -174,7 +214,15 @@ export async function generateStandupReport(todoDir: string, items: TodoItem[]):
 
   const highPriority: StandupPriorityItem[] = active
     .filter((i) => i.priority === "P0" || i.priority === "P1")
-    .map((i) => ({ id: i.id, description: i.description, priority: i.priority, status: i.status, type: i.type, githubUrl: i.githubUrl }));
+    .map((i) => ({
+      id: i.id, description: i.description, priority: i.priority, status: i.status, type: i.type, githubUrl: i.githubUrl,
+      subItems: getSubItemsForItem(todoDir, i.id),
+    }));
+
+  // PRs that are open (not draft) and not yet approved — needs review attention
+  const needsReview: StandupNeedsReviewItem[] = active
+    .filter((i) => i.type === "PR" && i.status && !i.status.toLowerCase().includes("approved") && !i.status.toLowerCase().includes("draft"))
+    .map((i) => ({ id: i.id, description: i.description, priority: i.priority, githubUrl: i.githubUrl }));
 
   const overdue: StandupOverdueItem[] = active
     .filter((i) => i.due && i.due < today)
@@ -192,93 +240,41 @@ export async function generateStandupReport(todoDir: string, items: TodoItem[]):
     date: today,
     yesterdayDate: yesterday,
     yesterday: { done, statusChanges, githubActivity },
-    today: { highPriority, overdue, dueToday, blocked },
+    today: { highPriority, needsReview, overdue, dueToday, blocked },
   };
 }
 
-function stripDescriptionLinks(desc: string): string {
-  // Strip markdown link prefixes like [org/repo#123](url) from description
-  return desc.replace(/^\[.*?\]\(.*?\)\s*/, "").trim();
-}
-
-export function buildStandupClaudePrompt(report: StandupReport): string {
-  const lines: string[] = [
-    `Today is ${report.date}. Generate a concise daily standup report based on the following activity data.`,
+export function buildStandupClaudePrompt(todoDir: string): string {
+  return [
+    `Today is ${dateString(0)}. Yesterday was ${dateString(-1)}.`,
     "",
-    "## Yesterday's Activity",
+    "Generate a concise daily standup report. Your primary source of information is the TODO list.",
     "",
-    `### Completed items (marked done on ${report.yesterdayDate}):`,
-  ];
-
-  if (report.yesterday.done.length === 0) {
-    lines.push("(none)");
-  } else {
-    for (const item of report.yesterday.done) {
-      lines.push(`- [${item.id}] ${stripDescriptionLinks(item.description)} (${item.type})`);
-    }
-  }
-
-  lines.push("", "### Status changes from update log:");
-  if (report.yesterday.statusChanges.length === 0) {
-    lines.push("(none)");
-  } else {
-    for (const c of report.yesterday.statusChanges) {
-      lines.push(`- [${c.id}] ${stripDescriptionLinks(c.description)}: ${c.oldStatus} → ${c.newStatus}`);
-    }
-  }
-
-  lines.push("", "### GitHub activity:");
-  if (report.yesterday.githubActivity.length === 0) {
-    lines.push("(none)");
-  } else {
-    for (const a of report.yesterday.githubActivity) {
-      lines.push(`- ${a.action} ${a.repo}: ${a.title}`);
-    }
-  }
-
-  lines.push("", "## Today's Priorities", "");
-
-  lines.push("### High priority items (P0/P1):");
-  if (report.today.highPriority.length === 0) {
-    lines.push("(none)");
-  } else {
-    for (const item of report.today.highPriority) {
-      lines.push(`- [${item.id}] ${item.priority}: ${stripDescriptionLinks(item.description)} — ${item.status}`);
-    }
-  }
-
-  if (report.today.overdue.length > 0) {
-    lines.push("", "### Overdue items:");
-    for (const item of report.today.overdue) {
-      lines.push(`- [${item.id}] ${stripDescriptionLinks(item.description)} (due ${item.due}, ${item.priority})`);
-    }
-  }
-
-  if (report.today.dueToday.length > 0) {
-    lines.push("", "### Due today:");
-    for (const item of report.today.dueToday) {
-      lines.push(`- [${item.id}] ${stripDescriptionLinks(item.description)} (${item.priority})`);
-    }
-  }
-
-  if (report.today.blocked.length > 0) {
-    lines.push("", "### Blocked:");
-    for (const item of report.today.blocked) {
-      lines.push(`- [${item.id}] ${stripDescriptionLinks(item.description)}`);
-    }
-  }
-
-  lines.push(
+    `Read the TODO data from: ${todoDir}`,
+    "- TODO.md contains the main table of items (ID, Description, Type, Status, Priority, Due, Done).",
+    "- Detail files (TODO-N.md) contain linked PRs/issues in markdown tables.",
+    "- The update log (update-log.jsonl) shows recent status changes with timestamps.",
     "",
-    "## Instructions",
+    "Use the TODO data and GitHub (via `gh` CLI) to understand what was worked on yesterday and what's planned for today.",
+    "",
+    "## Output format",
     "",
     "Write a concise standup report with exactly two sections:",
-    "**Yesterday** — what was accomplished or progressed (2-5 bullet points max, focus on meaningful work)",
-    "**Today** — the key things to work on today (2-5 bullet points max, focus on highest impact)",
+    "**Yesterday** — what was accomplished or progressed (2-5 bullet points max)",
+    "**Today** — the key things to work on today (2-5 bullet points max)",
     "",
-    "Be brief and specific. Mention PR/issue references where relevant. Skip items that are not meaningful",
-    "(e.g. automated status changes with no real work done). Do not include section headers beyond Yesterday/Today.",
-  );
-
-  return lines.join("\n");
+    "## Writing guidelines",
+    "",
+    "- Focus on the business value and impact, not status changes.",
+    "  BAD: 'PR optimism#1234 status changed from Open to Approved'",
+    "  GOOD: 'Got approval on the new rate limiting implementation (optimism#1234)'",
+    "  BAD: 'Merged optimism#5678'",
+    "  GOOD: 'Landed fix for race condition in batch processor (optimism#5678)'",
+    "- For Today items, make the action clear: 'Review ...', 'Continue work on ...', 'Merge ...', 'Address feedback on ...'",
+    "- Call out any of your own PRs that are open and awaiting review approval — these need attention.",
+    "- Reference PRs/issues inline (e.g. optimism#123) where helpful, but lead with what the work accomplishes.",
+    "- Skip items that are not meaningful (e.g. automated status changes with no real work done).",
+    "- Do not include internal TODO IDs (like TODO-1).",
+    "- Do not include section headers beyond Yesterday/Today.",
+  ].join("\n");
 }
