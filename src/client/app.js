@@ -11,7 +11,7 @@ import { sendClaudePrompt, handleClaudeStatus, pushHistory, resetHistoryNav, nav
 import { initKeyboard, showShortcutOverlay, closeShortcutOverlay } from './keyboard.js';
 import { initTheme, toggleTheme, initAccentPicker, showAccentPicker } from './theme.js';
 import { requestNotificationPermission, canNotify } from './notifications.js';
-import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar } from './bulk.js';
+import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar, showBulkTagPicker } from './bulk.js';
 import { showSuggestionBanner } from './suggestion.js';
 import { copyExport } from './export.js';
 import { initHoverCards } from './hovercard.js';
@@ -480,6 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
       else if (action === 'active') bulkMarkActive();
       else if (action === 'priority') bulkSetPriority(btn.dataset.priority);
       else if (action === 'clear') clearSelection();
+      else if (action === 'tag') { showBulkTagPicker(btn); return; }
       renderBulkToolbar();
     });
   });
