@@ -1,5 +1,5 @@
-// Inline pickers: priority picker, date picker
-import { updatePriority, updateSubPriority, updateDue } from './actions.js';
+// Inline pickers: priority picker, type picker, date picker
+import { updatePriority, updateSubPriority, updateDue, updateType } from './actions.js';
 import { pushUndo } from './undo.js';
 
 /**
@@ -194,4 +194,48 @@ export function showDatePicker(cell, item) {
     }
   };
   setTimeout(() => document.addEventListener('click', close, true), 0);
+}
+
+const TYPE_OPTIONS = [
+  { value: 'PR',         icon: '🔀', label: 'Pull Request' },
+  { value: 'Review',     icon: '👀', label: 'Review' },
+  { value: 'Issue',      icon: '📋', label: 'Issue' },
+  { value: 'Workstream', icon: '🏗️', label: 'Workstream' },
+];
+
+export function showTypePicker(anchorEl, item) {
+  document.querySelectorAll('.type-picker').forEach(el => el.remove());
+
+  const picker = document.createElement('div');
+  picker.className = 'type-picker';
+
+  for (const opt of TYPE_OPTIONS) {
+    const btn = document.createElement('button');
+    btn.className = 'type-picker-btn' + (opt.value === item.type ? ' current' : '');
+    btn.innerHTML = `<span class="tp-icon">${opt.icon}</span><span class="tp-label">${opt.value}</span>`;
+    btn.title = opt.label;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      picker.remove();
+      if (opt.value !== item.type) {
+        updateType(item.id, opt.value).catch(() => {});
+      }
+    });
+    picker.appendChild(btn);
+  }
+
+  // Position near anchor
+  const rect = anchorEl.getBoundingClientRect();
+  picker.style.position = 'fixed';
+  picker.style.top = (rect.bottom + 2) + 'px';
+  picker.style.left = rect.left + 'px';
+  document.body.appendChild(picker);
+
+  const typPickerClose = (e) => {
+    if (!picker.contains(e.target)) {
+      picker.remove();
+      document.removeEventListener('click', typPickerClose, true);
+    }
+  };
+  setTimeout(() => document.addEventListener('click', typPickerClose, true), 0);
 }

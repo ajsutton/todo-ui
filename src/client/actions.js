@@ -37,6 +37,15 @@ export async function updateDue(id, due) {
   if (!res.ok) throw new Error(await res.text());
 }
 
+export async function updateType(id, type) {
+  const res = await fetch('/api/type/' + id, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
 export async function updateDescription(id, description) {
   const res = await fetch('/api/description/' + id, {
     method: 'POST',

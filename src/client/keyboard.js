@@ -4,7 +4,7 @@ import { showDetail } from './detail.js';
 import { enterDetailEditMode } from './detail.js';
 import { renderTable } from './render.js';
 import { syncUrl } from './url.js';
-import { showPriorityPicker, showDatePicker } from './pickers.js';
+import { showPriorityPicker, showDatePicker, showTypePicker } from './pickers.js';
 import { openNewItemForm, isFormOpen, closeNewItemForm } from './newitem.js';
 import { showWeekView, closeWeekView, isWeekViewOpen } from './weekview.js';
 import { showDigest, closeDigest, isDigestOpen } from './digest.js';
@@ -337,6 +337,52 @@ export function initKeyboard() {
           if (item) {
             const dueCell = row.querySelector('[data-col="due"]');
             if (dueCell) showDatePicker(dueCell, item);
+          }
+        }
+        break;
+      }
+      case '+':
+      case '=': {
+        // Bump due date forward by 1 day
+        const rowsPlus = getVisibleRows();
+        if (appState.selectedRowIndex >= 0 && appState.selectedRowIndex < rowsPlus.length) {
+          e.preventDefault();
+          const id = rowsPlus[appState.selectedRowIndex].dataset.itemId;
+          const item = appState.items.find(i => i.id === id);
+          if (item) {
+            const base = item.due || new Date().toISOString().slice(0, 10);
+            const d = new Date(base + 'T12:00:00Z');
+            d.setUTCDate(d.getUTCDate() + 1);
+            import('./actions.js').then(({ updateDue }) => updateDue(id, d.toISOString().slice(0, 10)));
+          }
+        }
+        break;
+      }
+      case '-': {
+        // Bump due date back by 1 day
+        const rowsMinus = getVisibleRows();
+        if (appState.selectedRowIndex >= 0 && appState.selectedRowIndex < rowsMinus.length) {
+          e.preventDefault();
+          const id = rowsMinus[appState.selectedRowIndex].dataset.itemId;
+          const item = appState.items.find(i => i.id === id);
+          if (item && item.due) {
+            const d = new Date(item.due + 'T12:00:00Z');
+            d.setUTCDate(d.getUTCDate() - 1);
+            import('./actions.js').then(({ updateDue }) => updateDue(id, d.toISOString().slice(0, 10)));
+          }
+        }
+        break;
+      }
+      case 't': {
+        // Quick-set type on selected row
+        const rowsT = getVisibleRows();
+        if (appState.selectedRowIndex >= 0 && appState.selectedRowIndex < rowsT.length) {
+          e.preventDefault();
+          const row = rowsT[appState.selectedRowIndex];
+          const id = row.dataset.itemId;
+          const item = appState.items.find(i => i.id === id);
+          if (item) {
+            showTypePicker(row, item);
           }
         }
         break;
