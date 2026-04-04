@@ -95,6 +95,26 @@ describe('parseSearchQuery', () => {
     const r = parseSearchQuery('p:0');
     expect(r.tagFilter).toBe(null);
   });
+
+  it('parses due:today', () => {
+    const r = parseSearchQuery('due:today');
+    expect(r.dueFilter).toBe('today');
+  });
+
+  it('parses due:week', () => {
+    const r = parseSearchQuery('due:week');
+    expect(r.dueFilter).toBe('week');
+  });
+
+  it('parses due:3 as number', () => {
+    const r = parseSearchQuery('due:3');
+    expect(r.dueFilter).toBe(3);
+  });
+
+  it('returns null dueFilter when not present', () => {
+    const r = parseSearchQuery('p:0');
+    expect(r.dueFilter).toBe(null);
+  });
 });
 
 // ---- filterItems ----
@@ -263,6 +283,56 @@ describe('filterItems - tag filter', () => {
   it('ignores tagFilter when getItemTags is not provided', () => {
     const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'tag:bug' });
     expect(res.length).toBe(3);
+  });
+});
+
+// ---- filterItems - due date filter ----
+
+describe('filterItems - due filter', () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const in5days = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
+  const in10days = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10);
+
+  const items = [
+    makeItem({ id: 'TODAY', due: today, doneDate: '' }),
+    makeItem({ id: 'TOMORROW', due: tomorrow, doneDate: '' }),
+    makeItem({ id: 'IN5', due: in5days, doneDate: '' }),
+    makeItem({ id: 'IN10', due: in10days, doneDate: '' }),
+    makeItem({ id: 'NODUE', due: '', doneDate: '' }),
+    makeItem({ id: 'DONE', due: today, doneDate: '2026-01-01' }),
+  ];
+
+  it('due:today only returns items due today', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'due:today' });
+    const ids = res.map(i => i.id);
+    expect(ids).toContain('TODAY');
+    expect(ids).not.toContain('TOMORROW');
+    expect(ids).not.toContain('DONE');
+    expect(ids).not.toContain('NODUE');
+  });
+
+  it('due:week returns items due within 7 days', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'due:week' });
+    const ids = res.map(i => i.id);
+    expect(ids).toContain('TODAY');
+    expect(ids).toContain('TOMORROW');
+    expect(ids).toContain('IN5');
+    expect(ids).not.toContain('IN10');
+    expect(ids).not.toContain('NODUE');
+  });
+
+  it('due:3 returns items due within 3 days', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'due:3' });
+    const ids = res.map(i => i.id);
+    expect(ids).toContain('TODAY');
+    expect(ids).toContain('TOMORROW');
+    expect(ids).not.toContain('IN5');
+  });
+
+  it('due:week excludes done items', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'due:week' });
+    expect(res.map(i => i.id)).not.toContain('DONE');
   });
 });
 

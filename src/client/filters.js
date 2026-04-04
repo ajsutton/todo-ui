@@ -2,7 +2,8 @@
 
 /**
  * Parse a search query string into structured filters.
- * Supports: p:0, p:0-2, type:pr, status:failing, blocked, overdue, tag:name
+ * Supports: p:0, p:0-2, type:pr, status:failing, blocked, overdue,
+ *           due:today, due:week, due:N (within N days), tag:name
  * Remaining terms match description.
  */
 export function parseSearchQuery(query) {
@@ -13,6 +14,7 @@ export function parseSearchQuery(query) {
     typeFilter: null,   // string
     statusFilter: null, // string
     tagFilter: null,    // string
+    dueFilter: null,    // 'today' | 'week' | number (days)
     blocked: false,
     overdue: false,
     textTerms: [],
@@ -46,6 +48,12 @@ export function parseSearchQuery(query) {
     const tagMatch = token.match(/^tag:(.+)$/);
     if (tagMatch) {
       result.tagFilter = tagMatch[1];
+      continue;
+    }
+    const dueMatch = token.match(/^due:(today|week|\d+)$/);
+    if (dueMatch) {
+      const val = dueMatch[1];
+      result.dueFilter = val === 'today' ? 'today' : val === 'week' ? 'week' : parseInt(val, 10);
       continue;
     }
     result.textTerms.push(token);
@@ -87,6 +95,24 @@ export function filterItems(items, { filterType, filterStatus, searchQuery }, ge
     if (parsed.tagFilter && getItemTags) {
       const tags = getItemTags(item.id);
       if (!tags.includes(parsed.tagFilter)) return false;
+    }
+    if (parsed.dueFilter !== null) {
+      if (!item.due || item.doneDate) return false;
+      if (parsed.dueFilter === 'today') {
+        if (item.due !== today) return false;
+      } else if (parsed.dueFilter === 'week') {
+        // Within the next 7 days (including today)
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() + 7);
+        const cutoffStr = cutoff.toISOString().slice(0, 10);
+        if (item.due < today || item.due > cutoffStr) return false;
+      } else {
+        // due:N — within N days from today
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() + parsed.dueFilter);
+        const cutoffStr = cutoff.toISOString().slice(0, 10);
+        if (item.due < today || item.due > cutoffStr) return false;
+      }
     }
 
     // Text terms — must all match description
