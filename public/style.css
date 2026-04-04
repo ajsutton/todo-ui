@@ -3343,6 +3343,61 @@ mark.search-highlight {
 .ne-clear { color: var(--muted); }
 .ne-clear:hover { color: var(--fg); }
 
+/* Bulk due date picker */
+.bulk-due-picker {
+  position: fixed;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px var(--shadow);
+  padding: 10px 12px;
+  min-width: 240px;
+  z-index: 1000;
+  font-size: 13px;
+}
+
+.bdp-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--fg);
+}
+
+.bdp-quick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.bdp-quick {
+  padding: 3px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: none;
+  color: var(--fg);
+  cursor: pointer;
+}
+.bdp-quick:hover { background: var(--bg-secondary); }
+.bdp-quick:last-child { color: var(--muted); }
+
+.bdp-input-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.bdp-input {
+  flex: 1;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 12px;
+}
+.bdp-input:focus { outline: none; border-color: var(--accent); }
+
 /* Tag cloud panel */
 .tag-cloud-panel {
   position: fixed;
