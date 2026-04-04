@@ -2790,3 +2790,42 @@ body.has-p0::before {
   0%, 100% { opacity: 0.4; }
   50%       { opacity: 0.85; }
 }
+
+/* Quick Filter Chips */
+.quick-filters {
+  display: flex;
+  gap: 6px;
+  padding: 6px 16px 4px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.qf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--fg-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.qf-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+}
+
+.qf-chip.active {
+  background: color-mix(in srgb, var(--accent) 15%, var(--bg));
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}

@@ -271,6 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
     searchEl.value = query;
     appState.searchQuery = query;
     syncUrl();
+    document.dispatchEvent(new Event('search-changed'));
     renderTable();
   });
   document.getElementById('filter-type').onchange = (e) => {
@@ -281,6 +282,33 @@ document.addEventListener('DOMContentLoaded', () => {
     appState.filterStatus = e.target.value;
     renderTable();
   };
+
+  // Quick filter chips
+  function syncQuickFilterChips() {
+    document.querySelectorAll('.qf-chip').forEach(btn => {
+      btn.classList.toggle('active', appState.searchQuery === btn.dataset.query);
+    });
+  }
+  document.querySelectorAll('.qf-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const q = btn.dataset.query;
+      appState.searchQuery = appState.searchQuery === q ? '' : q;
+      searchEl.value = appState.searchQuery;
+      syncQuickFilterChips();
+      syncUrl();
+      renderTable();
+    });
+  });
+  // Keep chips in sync when search changes via text input
+  const _origSearchInput = searchEl.oninput;
+  searchEl.oninput = (e) => {
+    appState.searchQuery = e.target.value;
+    syncQuickFilterChips();
+    renderTable();
+  };
+  // Initial chip sync on load and when search is changed externally (e.g. preset apply)
+  syncQuickFilterChips();
+  document.addEventListener('search-changed', syncQuickFilterChips);
 
   // Update log
   document.getElementById('show-log').onclick = (e) => { e.preventDefault(); showLogDialog(); };
