@@ -350,6 +350,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // Share URL
+  const shareBtn = document.getElementById('share-url');
+  if (shareBtn) {
+    shareBtn.addEventListener('click', () => {
+      navigator.clipboard?.writeText(location.href).then(() => {
+        const orig = shareBtn.textContent;
+        shareBtn.textContent = 'Copied!';
+        setTimeout(() => { shareBtn.textContent = orig; }, 1500);
+      }).catch(() => {
+        prompt('Copy this URL:', location.href);
+      });
+    });
+  }
+
   // Export as Markdown
   const exportBtn = document.getElementById('export-md');
   if (exportBtn) {
