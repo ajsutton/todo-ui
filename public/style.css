@@ -1585,3 +1585,41 @@ td.editable:hover {
   font-size: 18px;
   color: var(--muted);
 }
+
+/* Row density modes */
+[data-density="compact"] td, [data-density="compact"] th {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+[data-density="compact"] .type-cell {
+  font-size: 1em;
+}
+
+[data-density="spacious"] td, [data-density="spacious"] th {
+  padding: 14px 16px;
+  font-size: 14px;
+}
+
+/* Density toggle button group */
+.density-group {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.density-btn {
+  background: var(--bg);
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--fg-secondary);
+  border-right: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.density-btn:last-child { border-right: none; }
+.density-btn:hover { background: var(--bg-secondary); }
+.density-btn.active {
+  background: var(--accent);
+  color: #fff;
+}

@@ -299,6 +299,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Row density toggle
+  const DENSITY_KEY = 'todo-density';
+  const savedDensity = localStorage.getItem(DENSITY_KEY) || 'normal';
+  document.documentElement.dataset.density = savedDensity;
+  document.querySelectorAll('.density-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.density === savedDensity);
+    btn.addEventListener('click', () => {
+      const d = btn.dataset.density;
+      document.documentElement.dataset.density = d;
+      localStorage.setItem(DENSITY_KEY, d);
+      document.querySelectorAll('.density-btn').forEach(b => b.classList.toggle('active', b.dataset.density === d));
+    });
+  });
+
   // "What's next?" suggestion
   document.getElementById('show-next')?.addEventListener('click', showSuggestionBanner);
 
