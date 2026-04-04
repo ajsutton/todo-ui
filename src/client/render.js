@@ -548,6 +548,19 @@ export function renderStats() {
   const totalCount = all.length;
   const donePercent = totalCount > 0 ? Math.round((done.length / totalCount) * 100) : 0;
 
+  // Top progress bar
+  const progressFill = document.getElementById('progress-bar-fill');
+  if (progressFill) {
+    progressFill.style.width = donePercent + '%';
+    progressFill.title = `${done.length} of ${totalCount} items done (${donePercent}%)`;
+    // Color shifts from accent → green as completion increases
+    progressFill.style.background = donePercent >= 80
+      ? 'var(--status-pass, #22c55e)'
+      : donePercent >= 50
+        ? 'color-mix(in srgb, var(--status-pass, #22c55e) 50%, var(--accent))'
+        : 'var(--accent)';
+  }
+
   const typeOrder = ['Review', 'PR', 'Issue', 'Workstream'];
   const typeCounts = {};
   for (const i of active) {
