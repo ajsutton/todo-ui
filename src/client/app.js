@@ -10,6 +10,7 @@ import { showStandupDialog, closeStandupDialog, switchStandupTab, copyStandupRep
 import { sendClaudePrompt, handleClaudeStatus, pushHistory, resetHistoryNav, navigateHistory } from './claude.js';
 import { initKeyboard, showShortcutOverlay, closeShortcutOverlay } from './keyboard.js';
 import { initTheme, toggleTheme } from './theme.js';
+import { requestNotificationPermission, canNotify } from './notifications.js';
 
 function showUpdateDialog(results, discovered, errors) {
   errors = errors || [];
@@ -295,6 +296,22 @@ document.addEventListener('DOMContentLoaded', () => {
       syncUrl();
     }
   });
+
+  // Notification toggle
+  const notifBtn = document.getElementById('notif-toggle');
+  function updateNotifBtn() {
+    if (!notifBtn) return;
+    if (!('Notification' in window)) { notifBtn.classList.add('hidden'); return; }
+    notifBtn.textContent = canNotify() ? '🔔' : '🔕';
+    notifBtn.title = canNotify() ? 'Notifications enabled' : 'Enable notifications';
+  }
+  if (notifBtn) {
+    notifBtn.onclick = async () => {
+      await requestNotificationPermission();
+      updateNotifBtn();
+    };
+    updateNotifBtn();
+  }
 
   // Theme toggle
   const themeBtn = document.getElementById('theme-toggle');
