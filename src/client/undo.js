@@ -3,6 +3,16 @@
 
 let undoState = null;  // { label, undo: () => void, timeoutId, toastEl }
 
+export function triggerUndo() {
+  if (!undoState) return false;
+  clearTimeout(undoState.timeoutId);
+  undoState.toastEl?.remove();
+  const fn = undoState.undo;
+  undoState = null;
+  fn();
+  return true;
+}
+
 export function pushUndo(label, undoFn) {
   // Cancel any previous undo
   if (undoState) {
