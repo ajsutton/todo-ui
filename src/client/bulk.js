@@ -140,6 +140,80 @@ export function showBulkTagPicker(anchorEl) {
   }, 50);
 }
 
+export function showBulkDuePicker(anchorEl) {
+  if (selection.size === 0) return;
+  document.getElementById('bulk-due-picker')?.remove();
+
+  const picker = document.createElement('div');
+  picker.id = 'bulk-due-picker';
+  picker.className = 'bulk-due-picker';
+
+  const quickDates = [
+    { label: 'Today',    days: 0 },
+    { label: 'Tomorrow', days: 1 },
+    { label: '+3d',      days: 3 },
+    { label: '+1w',      days: 7 },
+    { label: '+2w',      days: 14 },
+    { label: 'Clear',    days: null },
+  ];
+
+  const buttonsHtml = quickDates.map(q =>
+    `<button class="bdp-quick" data-days="${q.days === null ? '' : q.days}">${q.label}</button>`
+  ).join('');
+
+  picker.innerHTML = `
+    <div class="bdp-title">Set due date for ${selection.size} item${selection.size === 1 ? '' : 's'}</div>
+    <div class="bdp-quick-row">${buttonsHtml}</div>
+    <div class="bdp-input-row">
+      <input type="date" class="bdp-input">
+      <button class="btn-small bdp-set">Set</button>
+    </div>
+  `;
+
+  document.body.appendChild(picker);
+  positionNear(picker, anchorEl);
+
+  const dateInput = picker.querySelector('.bdp-input');
+
+  async function applyDue(due) {
+    const { updateDue } = await import('./actions.js');
+    await Promise.all([...selection].map(id => updateDue(id, due)));
+    picker.remove();
+    import('./render.js').then(m => m.renderTable());
+  }
+
+  picker.querySelectorAll('.bdp-quick').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const days = btn.dataset.days;
+      if (days === '') {
+        applyDue('');
+      } else {
+        const d = new Date();
+        d.setDate(d.getDate() + parseInt(days));
+        applyDue(d.toISOString().slice(0, 10));
+      }
+    });
+  });
+
+  picker.querySelector('.bdp-set').addEventListener('click', () => {
+    if (dateInput.value) applyDue(dateInput.value);
+  });
+
+  dateInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && dateInput.value) applyDue(dateInput.value);
+    if (e.key === 'Escape') picker.remove();
+  });
+
+  setTimeout(() => {
+    document.addEventListener('click', function handler(e) {
+      if (!picker.contains(e.target) && e.target !== anchorEl) {
+        picker.remove();
+        document.removeEventListener('click', handler, true);
+      }
+    }, { capture: true });
+  }, 50);
+}
+
 function positionNear(el, anchor) {
   const rect = anchor.getBoundingClientRect();
   el.style.position = 'fixed';

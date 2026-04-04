@@ -18,7 +18,7 @@ import { initGoalWidget } from './goals.js';
 import { initSoundBtn } from './sounds.js';
 import { initTagCloud, showTagCloud } from './tagcloud.js';
 import { requestNotificationPermission, canNotify } from './notifications.js';
-import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar, showBulkTagPicker } from './bulk.js';
+import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar, showBulkTagPicker, showBulkDuePicker } from './bulk.js';
 import { showSuggestionBanner } from './suggestion.js';
 import { copyExport, downloadCsv } from './export.js';
 import { initHoverCards } from './hovercard.js';
@@ -501,6 +501,7 @@ document.addEventListener('DOMContentLoaded', () => {
       else if (action === 'priority') bulkSetPriority(btn.dataset.priority);
       else if (action === 'clear') clearSelection();
       else if (action === 'tag') { showBulkTagPicker(btn); return; }
+      else if (action === 'due') { showBulkDuePicker(btn); return; }
       renderBulkToolbar();
     });
   });
