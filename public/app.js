@@ -99,6 +99,12 @@ function connectWebSocket() {
       handleClaudeStatus(msg.data);
     } else if (msg.type === 'standup-status') {
       handleStandupStatus(msg.data);
+    } else if (msg.type === 'standup-cache-updated') {
+      // If standup dialog is open on the Claude tab, update the display
+      const dialog = document.getElementById('standup-dialog');
+      if (!dialog.classList.contains('hidden') && activeStandupTab === 'claude') {
+        displayStandupClaudeReport(msg.data.output, msg.data.generatedAt);
+      }
     } else if (msg.type === 'items-auto-added') {
       showAutoAddedNotice(msg.data);
     } else if (msg.type === 'reload') {
@@ -1269,18 +1275,13 @@ let standupClaudeLoaded = false;
 
 async function showStandupDialog() {
   const dialog = document.getElementById('standup-dialog');
-  // Reset both tabs so they regenerate on next switch
+  // Reset report tab so it regenerates fresh on next switch
   standupReportLoaded = false;
-  standupClaudeLoaded = false;
   currentStandupReport = null;
-  standupClaudeRawOutput = '';
-  document.getElementById('standup-claude-output').textContent = '';
-  document.getElementById('standup-claude-output').classList.add('hidden');
-  document.getElementById('standup-claude-output').classList.remove('claude-error');
-  document.getElementById('standup-claude-rendered').innerHTML = '';
-  document.getElementById('standup-claude-rendered').classList.add('hidden');
+  // Reset Claude tab load flag so it re-checks cache on next switch
+  standupClaudeLoaded = false;
   dialog.classList.remove('hidden');
-  switchStandupTab('report');
+  switchStandupTab('claude');
 }
 
 function closeStandupDialog() {
@@ -1300,7 +1301,7 @@ function switchStandupTab(tab) {
     loadStandupReport();
   } else if (tab === 'claude' && !standupClaudeLoaded) {
     standupClaudeLoaded = true;
-    generateStandupWithClaude();
+    loadOrGenerateStandupClaude();
   }
 }
 
@@ -1801,11 +1802,68 @@ function renderSimpleMarkdown(text) {
 
 let standupClaudeRawOutput = '';
 
+async function loadOrGenerateStandupClaude() {
+  // Show loading state while checking cache
+  const spinner = document.getElementById('standup-claude-spinner');
+  const spinnerLabel = document.getElementById('standup-claude-spinner-label');
+  const btn = document.getElementById('standup-claude-generate');
+  spinner.classList.remove('hidden');
+  spinnerLabel.textContent = 'Loading...';
+  btn.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/standup/claude');
+    if (res.ok) {
+      const cache = await res.json();
+      if (cache.output) {
+        displayStandupClaudeReport(cache.output, cache.generatedAt);
+        return;
+      }
+    }
+  } catch {
+    // Fall through to generation
+  }
+  // No cache available — generate fresh
+  generateStandupWithClaude();
+}
+
+function displayStandupClaudeReport(output, generatedAt) {
+  const outputEl = document.getElementById('standup-claude-output');
+  const rendered = document.getElementById('standup-claude-rendered');
+  const spinner = document.getElementById('standup-claude-spinner');
+  const btn = document.getElementById('standup-claude-generate');
+  const timeEl = document.getElementById('standup-claude-generated-at');
+
+  standupClaudeRawOutput = output || '';
+  spinner.classList.add('hidden');
+  outputEl.classList.add('hidden');
+  outputEl.classList.remove('claude-error');
+  btn.disabled = false;
+  btn.classList.remove('hidden');
+
+  if (standupClaudeRawOutput.trim()) {
+    rendered.innerHTML = renderSimpleMarkdown(standupClaudeRawOutput);
+    rendered.classList.remove('hidden');
+  } else {
+    rendered.classList.add('hidden');
+  }
+
+  if (generatedAt) {
+    const d = new Date(generatedAt);
+    timeEl.textContent = 'Generated ' + d.toLocaleString();
+    timeEl.classList.remove('hidden');
+  } else {
+    timeEl.classList.add('hidden');
+  }
+}
+
 async function generateStandupWithClaude() {
   const output = document.getElementById('standup-claude-output');
   const rendered = document.getElementById('standup-claude-rendered');
   const spinner = document.getElementById('standup-claude-spinner');
+  const spinnerLabel = document.getElementById('standup-claude-spinner-label');
   const btn = document.getElementById('standup-claude-generate');
+  const timeEl = document.getElementById('standup-claude-generated-at');
 
   standupClaudeRawOutput = '';
   output.textContent = '';
@@ -1814,6 +1872,8 @@ async function generateStandupWithClaude() {
   rendered.classList.add('hidden');
   rendered.innerHTML = '';
   spinner.classList.remove('hidden');
+  spinnerLabel.textContent = 'Thinking...';
+  timeEl.classList.add('hidden');
   btn.classList.add('hidden');
   btn.disabled = true;
 
@@ -1838,7 +1898,6 @@ async function generateStandupWithClaude() {
 
 function handleStandupStatus(data) {
   const output = document.getElementById('standup-claude-output');
-  const rendered = document.getElementById('standup-claude-rendered');
   const spinner = document.getElementById('standup-claude-spinner');
   const spinnerLabel = document.getElementById('standup-claude-spinner-label');
   const btn = document.getElementById('standup-claude-generate');
@@ -1849,17 +1908,11 @@ function handleStandupStatus(data) {
       spinnerLabel.textContent = label + '...';
     }
   } else if (data.status === 'done') {
-    spinner.classList.add('hidden');
-    btn.disabled = false;
-    btn.classList.remove('hidden');
-    standupClaudeRawOutput = data.output || '';
-    if (standupClaudeRawOutput.trim()) {
-      rendered.innerHTML = renderSimpleMarkdown(standupClaudeRawOutput);
-      rendered.classList.remove('hidden');
-      output.classList.add('hidden');
-    }
+    // Cache timestamp will arrive via standup-cache-updated; use now as fallback
+    displayStandupClaudeReport(data.output || '', new Date().toISOString());
   } else if (data.status === 'error') {
     spinner.classList.add('hidden');
+    output.classList.remove('hidden');
     output.classList.add('claude-error');
     output.textContent += (output.textContent ? '\n' : '') + 'Error: ' + data.output;
     btn.disabled = false;

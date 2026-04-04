@@ -69,6 +69,15 @@ if (existsSync(configDir)) {
 const AUTO_UPDATE_INTERVAL_MS = 15 * 60 * 1000;
 let autoUpdateRunning = false;
 
+// In-memory cache for Claude standup report
+interface StandupClaudeCache {
+  output: string;
+  generatedAt: string;
+  forDate: string;
+}
+let standupClaudeCache: StandupClaudeCache | null = null;
+let standupAutoGenerating = false;
+
 async function runAutoUpdate(): Promise<void> {
   if (autoUpdateRunning) return;
   autoUpdateRunning = true;
@@ -108,6 +117,66 @@ async function runAutoUpdate(): Promise<void> {
   } finally {
     autoUpdateRunning = false;
   }
+}
+
+async function runStandupAutoGeneration(): Promise<void> {
+  if (standupAutoGenerating) return;
+  standupAutoGenerating = true;
+  const today = new Date().toISOString().slice(0, 10);
+  console.log("[standup] Auto-generating Claude standup report...");
+  try {
+    const prompt = buildStandupClaudePrompt(watcher.getDir());
+    const requestId = "auto";
+    let currentTurnText = "";
+
+    broadcast({ type: "standup-status", data: { requestId, status: "running", output: "" } });
+
+    for await (const chunk of runClaudePrompt(CLAUDE_CWD, prompt)) {
+      if (chunk.kind === "text") {
+        currentTurnText += chunk.text;
+      } else if (chunk.kind === "activity") {
+        currentTurnText = "";
+        broadcast({ type: "standup-status", data: { requestId, status: "running", output: "", activity: chunk.tool } });
+      }
+    }
+
+    standupClaudeCache = { output: currentTurnText, generatedAt: new Date().toISOString(), forDate: today };
+    broadcast({ type: "standup-cache-updated", data: standupClaudeCache });
+    console.log("[standup] Auto-generation complete");
+  } catch (err) {
+    console.error("[standup] Auto-generation failed:", err);
+    broadcast({ type: "standup-status", data: { requestId: "auto", status: "error", output: String(err) } });
+  } finally {
+    standupAutoGenerating = false;
+  }
+}
+
+function scheduleNextDailyStandup(): void {
+  const now = new Date();
+  const next5am = new Date(now);
+  next5am.setHours(5, 0, 0, 0);
+  if (next5am.getTime() <= now.getTime()) {
+    next5am.setDate(next5am.getDate() + 1);
+  }
+  const ms = next5am.getTime() - now.getTime();
+  console.log(`[standup] Next auto-generation in ${Math.round(ms / 1000 / 60)}m`);
+  setTimeout(async () => {
+    await runStandupAutoGeneration();
+    scheduleNextDailyStandup();
+  }, ms);
+}
+
+// On startup: if past 5am today and no cached report for today, generate immediately
+{
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const today5am = new Date(now);
+  today5am.setHours(5, 0, 0, 0);
+  if (now.getTime() >= today5am.getTime() && (!standupClaudeCache || standupClaudeCache.forDate !== today)) {
+    console.log("[standup] Server missed 5am generation, running now...");
+    runStandupAutoGeneration();
+  }
+  scheduleNextDailyStandup();
 }
 
 // Schedule first update based on time since last auto-update
@@ -404,6 +473,10 @@ const server = Bun.serve({
       }
     }
 
+    if (req.method === "GET" && pathname === "/api/standup/claude") {
+      return jsonResponse(standupClaudeCache ?? { output: null, generatedAt: null, forDate: null });
+    }
+
     if (req.method === "POST" && pathname === "/api/standup/claude") {
       try {
         const prompt = buildStandupClaudePrompt(watcher.getDir());
@@ -432,6 +505,11 @@ const server = Bun.serve({
                 });
               }
             }
+
+            // Cache the result
+            const today = new Date().toISOString().slice(0, 10);
+            standupClaudeCache = { output: currentTurnText, generatedAt: new Date().toISOString(), forDate: today };
+            broadcast({ type: "standup-cache-updated", data: standupClaudeCache });
 
             broadcast({
               type: "standup-status",
