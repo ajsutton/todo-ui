@@ -2412,6 +2412,23 @@ tbody tr {
 }
 .wv-hint { font-size: 11px; color: var(--muted); }
 
+/* Theme toggle: circular reveal via View Transitions API */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  clip-path: circle(0% at var(--theme-cx, 50%) var(--theme-cy, 50%));
+  animation: theme-reveal 0.4s ease-in forwards;
+}
+
+@keyframes theme-reveal {
+  from { clip-path: circle(0% at var(--theme-cx, 50%) var(--theme-cy, 50%)); }
+  to   { clip-path: circle(var(--theme-r, 150%) at var(--theme-cx, 50%) var(--theme-cy, 50%)); }
+}
+
 /* Print / PDF export styles */
 @media print {
   header, .filters, .presets-bar, .stats-bar, .bulk-toolbar,

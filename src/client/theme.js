@@ -15,12 +15,31 @@ export function toggleTheme() {
   } else if (current === 'dark') {
     next = 'light';
   } else {
-    // No explicit theme set — toggle from system preference
     next = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
   }
-  document.documentElement.dataset.theme = next;
-  localStorage.setItem(THEME_KEY, next);
-  updateThemeButton();
+
+  // Circular reveal animation from the theme button
+  const btn = document.getElementById('theme-toggle');
+  if (btn && document.startViewTransition) {
+    const rect = btn.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const maxR = Math.hypot(Math.max(cx, window.innerWidth - cx), Math.max(cy, window.innerHeight - cy));
+
+    document.documentElement.style.setProperty('--theme-cx', cx + 'px');
+    document.documentElement.style.setProperty('--theme-cy', cy + 'px');
+    document.documentElement.style.setProperty('--theme-r', maxR + 'px');
+
+    document.startViewTransition(() => {
+      document.documentElement.dataset.theme = next;
+      localStorage.setItem(THEME_KEY, next);
+      updateThemeButton();
+    });
+  } else {
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem(THEME_KEY, next);
+    updateThemeButton();
+  }
 }
 
 function updateThemeButton() {
