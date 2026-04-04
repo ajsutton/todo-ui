@@ -1479,6 +1479,7 @@ td.editable:hover {
 }
 
 /* Stale item indicator — unchanged status/priority for >7 days */
+/* Tiered aging: 7d=mild, 14d=moderate, 30d=severe */
 .row-stale td:first-child::after {
   content: "·";
   color: var(--muted);
@@ -1488,9 +1489,11 @@ td.editable:hover {
   opacity: 0.6;
 }
 
-.row-stale {
-  opacity: 0.85;
-}
+.row-stale { opacity: 0.85; }
+.row-stale-14 { opacity: 0.7; }
+.row-stale-14 .desc-cell { color: var(--fg-secondary); }
+.row-stale-30 { opacity: 0.55; }
+.row-stale-30 .desc-cell { color: var(--muted); text-decoration: line-through wavy var(--muted); }
 
 /* Bulk selection toolbar */
 .bulk-toolbar {
