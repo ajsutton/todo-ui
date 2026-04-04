@@ -16,6 +16,7 @@ import { initDensity } from './density.js';
 import { applyColumnVisibility, showColumnPicker } from './columns.js';
 import { initGoalWidget } from './goals.js';
 import { initSoundBtn } from './sounds.js';
+import { initTagCloud, showTagCloud } from './tagcloud.js';
 import { requestNotificationPermission, canNotify } from './notifications.js';
 import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar, showBulkTagPicker } from './bulk.js';
 import { showSuggestionBanner } from './suggestion.js';
@@ -191,6 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initSoundBtn();
   applyColumnVisibility();
   initGoalWidget([]);
+  initTagCloud();
   initSessionBadge();
   initStreakBadge();
 
