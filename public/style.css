@@ -1358,3 +1358,117 @@ td.editable:hover {
 .standup-claude-rendered a {
   color: var(--accent);
 }
+
+/* Overdue and today highlighting */
+.due-overdue {
+  color: var(--status-fail);
+  font-weight: 600;
+}
+.due-today {
+  color: var(--p1);
+  font-weight: 600;
+}
+.due-overdue::before {
+  content: "⚠ ";
+  font-size: 0.8em;
+}
+
+/* Keyboard navigation row selection */
+.row-selected td {
+  background: color-mix(in srgb, var(--accent) 8%, transparent) !important;
+  border-left: 3px solid var(--accent);
+}
+.row-selected td:first-child {
+  padding-left: 9px;
+}
+
+/* Keyboard shortcut table */
+.shortcut-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.shortcut-table td {
+  padding: 4px 12px;
+  font-size: 13px;
+}
+.shortcut-key {
+  font-family: monospace;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Theme toggle and shortcuts button styles */
+#theme-toggle, #show-shortcuts {
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+/* Auto-added notice */
+.auto-added-notice {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: var(--accent);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px var(--shadow);
+}
+
+/* Theme data attribute overrides */
+[data-theme="dark"] {
+  --bg: #0f172a;
+  --bg-secondary: #1e293b;
+  --fg: #e2e8f0;
+  --fg-secondary: #94a3b8;
+  --table-hover: #1e293b;
+  --border: #334155;
+  --muted: #64748b;
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --p0: #ef4444;
+  --p1: #f97316;
+  --p2: #eab308;
+  --p3: #3b82f6;
+  --p4: #6b7280;
+  --p5: #4b5563;
+  --status-fail: #ef4444;
+  --status-pass: #22c55e;
+  --panel-bg: #1e293b;
+  --input-bg: #0f172a;
+  --input-border: #475569;
+  --shadow: rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --fg: #1a1a1a;
+  --fg-secondary: #555;
+  --table-hover: #f0f0f0;
+  --border: #e0e0e0;
+  --muted: #888;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --p0: #dc2626;
+  --p1: #ea580c;
+  --p2: #ca8a04;
+  --p3: #2563eb;
+  --p4: #9ca3af;
+  --p5: #d1d5db;
+  --status-fail: #dc2626;
+  --status-pass: #16a34a;
+  --status-done-opacity: 0.5;
+  --panel-bg: #ffffff;
+  --input-bg: #ffffff;
+  --input-border: #d1d5db;
+  --shadow: rgba(0, 0, 0, 0.1);
+}

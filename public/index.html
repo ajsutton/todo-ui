@@ -15,6 +15,8 @@
     </div>
     <div class="actions">
       <span id="last-update" class="last-update"></span>
+      <button id="theme-toggle" class="btn-icon" title="Toggle theme">🌙</button>
+      <button id="show-shortcuts" class="btn-icon" title="Keyboard shortcuts">?</button>
       <button id="show-standup" class="btn-small">Standup</button>
       <a id="show-log" href="#" title="Update log">View Log</a>
       <div class="update-action">
@@ -145,6 +147,29 @@
           <button id="standup-close-btn" class="btn-small">Close</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="shortcut-overlay" class="dialog-overlay hidden">
+    <div class="dialog">
+      <div class="dialog-header">
+        <h2>Keyboard Shortcuts</h2>
+        <button id="shortcut-overlay-close" class="btn-icon">&times;</button>
+      </div>
+      <table class="shortcut-table">
+        <tbody>
+          <tr><td><kbd class="shortcut-key">j</kbd> / <kbd class="shortcut-key">↓</kbd></td><td>Select next row</td></tr>
+          <tr><td><kbd class="shortcut-key">k</kbd> / <kbd class="shortcut-key">↑</kbd></td><td>Select previous row</td></tr>
+          <tr><td><kbd class="shortcut-key">Enter</kbd> / <kbd class="shortcut-key">o</kbd></td><td>Open detail panel</td></tr>
+          <tr><td><kbd class="shortcut-key">d</kbd></td><td>Mark selected done/undone</td></tr>
+          <tr><td><kbd class="shortcut-key">e</kbd></td><td>Edit detail panel</td></tr>
+          <tr><td><kbd class="shortcut-key">g</kbd></td><td>Open GitHub link</td></tr>
+          <tr><td><kbd class="shortcut-key">/</kbd></td><td>Focus search</td></tr>
+          <tr><td><kbd class="shortcut-key">f</kbd></td><td>Toggle focus mode (P0/P1 only)</td></tr>
+          <tr><td><kbd class="shortcut-key">?</kbd></td><td>Show/hide this overlay</td></tr>
+          <tr><td><kbd class="shortcut-key">Esc</kbd></td><td>Close overlay/dialog/panel</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
