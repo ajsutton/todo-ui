@@ -17,6 +17,7 @@ import { getSnoozedIds } from './snooze.js';
 import { pushUndo } from './undo.js';
 import { showContextMenu } from './contextmenu.js';
 import { applyDensity } from './density.js';
+import { hasNote, getNote, showNoteEditor } from './notes.js';
 
 // Stale IDs maintained across renders
 let staleIds = new Set();
@@ -318,6 +319,19 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
     input.addEventListener('click', (e) => e.stopPropagation());
   });
   tdDesc.appendChild(descSpan);
+
+  // Personal note indicator
+  if (hasNote(item.id)) {
+    const noteIcon = document.createElement('span');
+    noteIcon.className = 'note-icon';
+    noteIcon.textContent = '📝';
+    noteIcon.title = getNote(item.id);
+    noteIcon.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showNoteEditor(noteIcon, item.id, () => import('./render.js').then(m => m.renderTable()));
+    });
+    tdDesc.appendChild(noteIcon);
+  }
 
   // Tag pills — clickable to filter by tag
   const tagPillsHtml = renderTagPills(item.id, false);

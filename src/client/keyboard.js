@@ -222,9 +222,24 @@ export function initKeyboard() {
         else showWeekView();
         break;
       case 'n':
-        e.preventDefault();
-        if (isFormOpen()) closeNewItemForm();
-        else openNewItemForm();
+        // Shift+N: quick note on selected; N alone: new item form
+        if (e.shiftKey) {
+          e.preventDefault();
+          const rowsN = getVisibleRows();
+          if (appState.selectedRowIndex >= 0 && appState.selectedRowIndex < rowsN.length) {
+            const row = rowsN[appState.selectedRowIndex];
+            const id = row.dataset.itemId;
+            if (id) {
+              import('./notes.js').then(({ showNoteEditor }) => {
+                showNoteEditor(row, id, () => import('./render.js').then(m => m.renderTable()));
+              });
+            }
+          }
+        } else {
+          e.preventDefault();
+          if (isFormOpen()) closeNewItemForm();
+          else openNewItemForm();
+        }
         break;
       case 'r': {
         // Refresh GitHub status of selected row
