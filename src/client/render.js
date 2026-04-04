@@ -8,6 +8,7 @@ import { updateStaleTracker } from './stale.js';
 import { selection, isSelectionMode, toggleSelected } from './bulk.js';
 import { computeUrgency, urgencyColor } from './urgency.js';
 import { recordSnapshot, renderSparkline } from './history.js';
+import { renderTimerBtn, showTimerPicker, getTimerItemId } from './timer.js';
 
 // Stale IDs maintained across renders
 let staleIds = new Set();
@@ -245,6 +246,27 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
       }
     };
     actionsWrap.appendChild(refreshBtn);
+  }
+
+  // Focus timer button
+  if (!isDone) {
+    const timerBtn = document.createElement('button');
+    const isActive = getTimerItemId() === item.id;
+    timerBtn.textContent = '🍅';
+    timerBtn.className = 'btn-small btn-icon-inline timer-btn' + (isActive ? ' timer-active' : '');
+    timerBtn.title = isActive ? 'Stop focus timer' : 'Start focus timer';
+    timerBtn.onclick = (e) => {
+      e.stopPropagation();
+      import('./timer.js').then(({ showTimerPicker, stopTimer, getTimerItemId }) => {
+        if (getTimerItemId() === item.id) {
+          stopTimer();
+          import('./render.js').then(m => m.renderTable());
+        } else {
+          showTimerPicker(item.id, item.description || item.id, timerBtn);
+        }
+      });
+    };
+    actionsWrap.appendChild(timerBtn);
   }
 
   tdActions.appendChild(actionsWrap);
