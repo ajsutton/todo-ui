@@ -217,6 +217,23 @@ export function initKeyboard() {
         if (isFormOpen()) closeNewItemForm();
         else openNewItemForm();
         break;
+      case 'c': {
+        // Copy item ID + description to clipboard
+        const rows3 = getVisibleRows();
+        if (appState.selectedRowIndex >= 0 && appState.selectedRowIndex < rows3.length) {
+          e.preventDefault();
+          const row = rows3[appState.selectedRowIndex];
+          const id = row.dataset.itemId;
+          const item = appState.items.find(i => i.id === id);
+          if (item) {
+            const text = `${id}: ${item.description || id}`;
+            navigator.clipboard?.writeText(text).then(() => {
+              import('./render.js').then(({ showCopyToast }) => showCopyToast(id));
+            }).catch(() => {});
+          }
+        }
+        break;
+      }
       case 'p': {
         // Quick-set priority on selected row
         const rows2 = getVisibleRows();

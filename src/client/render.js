@@ -509,6 +509,21 @@ export async function fetchLastUpdateTime() {
   } catch {}
 }
 
+export function showCopyToast(id) {
+  const existing = document.getElementById('copy-toast');
+  if (existing) existing.remove();
+  const t = document.createElement('div');
+  t.id = 'copy-toast';
+  t.className = 'copy-toast';
+  t.textContent = `Copied ${id}`;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('copy-toast-visible'));
+  setTimeout(() => {
+    t.classList.remove('copy-toast-visible');
+    setTimeout(() => t.remove(), 250);
+  }, 1500);
+}
+
 export function showAutoAddedNotice(data) {
   // Simple banner notification for auto-added items
   const existing = document.getElementById('auto-added-notice');
