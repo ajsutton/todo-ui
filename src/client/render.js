@@ -12,7 +12,7 @@ import { renderTimerBtn, showTimerPicker, getTimerItemId } from './timer.js';
 import { isGroupByMode, groupItems, buildGroupHeaderRow, isGroupCollapsed } from './groupby.js';
 import { renderHeatmap } from './heatmap.js';
 import { sortWithPinned, togglePin, isPinned } from './pinned.js';
-import { renderTagPills, showTagPicker } from './tags.js';
+import { renderTagPills, showTagPicker, getTagsForItem } from './tags.js';
 import { getSnoozedIds } from './snooze.js';
 import { pushUndo } from './undo.js';
 
@@ -88,7 +88,7 @@ export function renderTable() {
     filterType: appState.filterType,
     filterStatus: appState.filterStatus,
     searchQuery: appState.searchQuery,
-  });
+  }, getTagsForItem);
   // Hide snoozed items (unless explicitly showing done/all or _showSnoozed toggled)
   if (appState.filterStatus !== 'done' && snoozed.size > 0 && !appState._showSnoozed) {
     items = items.filter(i => !snoozed.has(i.id));
@@ -210,12 +210,25 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
   });
   tdDesc.appendChild(descSpan);
 
-  // Tag pills
+  // Tag pills — clickable to filter by tag
   const tagPillsHtml = renderTagPills(item.id, false);
   if (tagPillsHtml) {
     const tagContainer = document.createElement('span');
     tagContainer.className = 'tag-pills-container';
     tagContainer.innerHTML = tagPillsHtml;
+    tagContainer.querySelectorAll && tagContainer.addEventListener('click', (e) => {
+      const pill = e.target.closest('.tag-pill');
+      if (!pill) return;
+      e.stopPropagation();
+      const tagText = pill.textContent.trim();
+      if (tagText) {
+        appState.searchQuery = 'tag:' + tagText;
+        const searchEl = document.getElementById('search');
+        if (searchEl) searchEl.value = appState.searchQuery;
+        syncUrl();
+        import('./render.js').then(m => m.renderTable());
+      }
+    });
     tdDesc.appendChild(tagContainer);
   }
 

@@ -80,6 +80,21 @@ describe('parseSearchQuery', () => {
     expect(r.typeFilter).toBe('pr');
     expect(r.textTerms).toEqual(['review']);
   });
+
+  it('parses tag:name', () => {
+    const r = parseSearchQuery('tag:bug');
+    expect(r.tagFilter).toBe('bug');
+  });
+
+  it('parses tag:multi-word-tag', () => {
+    const r = parseSearchQuery('tag:needs-review');
+    expect(r.tagFilter).toBe('needs-review');
+  });
+
+  it('returns null tagFilter when not present', () => {
+    const r = parseSearchQuery('p:0');
+    expect(r.tagFilter).toBe(null);
+  });
 });
 
 // ---- filterItems ----
@@ -200,6 +215,54 @@ describe('filterItems - field-specific search', () => {
     const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'p:0 failing' });
     expect(res.length).toBe(1);
     expect(res[0].id).toBe('TODO-1');
+  });
+});
+
+// ---- filterItems - tag filter ----
+
+describe('filterItems - tag filter', () => {
+  const items = [
+    makeItem({ id: 'TODO-1' }),
+    makeItem({ id: 'TODO-2' }),
+    makeItem({ id: 'TODO-3' }),
+  ];
+  const tagMap = {
+    'TODO-1': ['bug', 'urgent'],
+    'TODO-2': ['feature'],
+    'TODO-3': [],
+  };
+  const getItemTags = (id) => tagMap[id] || [];
+
+  it('filters items with a specific tag', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'tag:bug' }, getItemTags);
+    expect(res.length).toBe(1);
+    expect(res[0].id).toBe('TODO-1');
+  });
+
+  it('returns multiple items sharing the same tag', () => {
+    const items2 = [
+      makeItem({ id: 'TODO-1' }),
+      makeItem({ id: 'TODO-2' }),
+    ];
+    const tags2 = { 'TODO-1': ['bug'], 'TODO-2': ['bug'] };
+    const res = filterItems(items2, { filterType: '', filterStatus: '', searchQuery: 'tag:bug' }, (id) => tags2[id] || []);
+    expect(res.length).toBe(2);
+  });
+
+  it('excludes items without the tag', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'tag:feature' }, getItemTags);
+    expect(res.length).toBe(1);
+    expect(res[0].id).toBe('TODO-2');
+  });
+
+  it('returns no items when no item has the tag', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'tag:nonexistent' }, getItemTags);
+    expect(res.length).toBe(0);
+  });
+
+  it('ignores tagFilter when getItemTags is not provided', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'tag:bug' });
+    expect(res.length).toBe(3);
   });
 });
 
