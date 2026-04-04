@@ -16,6 +16,7 @@ import { showSuggestionBanner } from './suggestion.js';
 import { copyExport } from './export.js';
 import { initHoverCards } from './hovercard.js';
 import { initQuickAdd } from './quickadd.js';
+import { initPalette } from './palette.js';
 
 function showUpdateDialog(results, discovered, errors) {
   errors = errors || [];
@@ -388,4 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Quick-add via paste
   initQuickAdd();
+
+  // Command palette (Cmd+K / Ctrl+K)
+  initPalette();
 });
