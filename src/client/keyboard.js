@@ -4,6 +4,7 @@ import { showDetail } from './detail.js';
 import { enterDetailEditMode } from './detail.js';
 import { renderTable } from './render.js';
 import { syncUrl } from './url.js';
+import { showPriorityPicker } from './pickers.js';
 
 function getVisibleRows() {
   return Array.from(document.querySelectorAll('#todo-body tr[data-item-id]'));
@@ -210,6 +211,25 @@ export function initKeyboard() {
         e.preventDefault();
         toggleFocusMode();
         break;
+      case 'p': {
+        // Quick-set priority on selected row
+        const rows2 = getVisibleRows();
+        if (appState.selectedRowIndex >= 0 && appState.selectedRowIndex < rows2.length) {
+          e.preventDefault();
+          const row = rows2[appState.selectedRowIndex];
+          const id = row.dataset.itemId;
+          const item = appState.items.find(i => i.id === id);
+          if (item) {
+            // Priority cell: col 3 normally, col 4 in bulk mode (checkbox prepended)
+            import('./bulk.js').then(({ isSelectionMode }) => {
+              const offset = isSelectionMode() ? 1 : 0;
+              const priCell = row.cells[3 + offset];
+              if (priCell) showPriorityPicker(priCell, item);
+            });
+          }
+        }
+        break;
+      }
     }
   });
 }
