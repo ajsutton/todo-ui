@@ -9,7 +9,7 @@ function closeMenu() {
 }
 
 // Close on any outside click or scroll (guarded for non-browser environments)
-if (typeof document !== 'undefined') {
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
   document.addEventListener('mousedown', (e) => {
     if (menuEl && !menuEl.contains(e.target)) closeMenu();
   }, true);

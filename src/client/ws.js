@@ -7,6 +7,7 @@ import { handleClaudeStatus } from './claude.js';
 import { handleStandupStatus, displayStandupClaudeReport } from './standup.js';
 import { updateSessionStats } from './session.js';
 import { initChangelogSnapshot, diffSinceLastVisit, showChangelogBanner, updateLatestItems } from './changelog.js';
+import { updateGoalWidget } from './goals.js';
 
 function handleUpdateProgress(data) {
   const progress = document.getElementById('update-progress');
@@ -81,6 +82,7 @@ export function connectWebSocket() {
       }
       appState.dataLoaded = true;
       updateLatestItems(appState.items);
+      updateGoalWidget(appState.items);
       refreshStale();
       checkForNotifiableChanges(appState.items);
       updateSessionStats(appState.items);

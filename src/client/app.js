@@ -14,6 +14,7 @@ import { initSessionBadge } from './session.js';
 import { initStreakBadge } from './streak.js';
 import { initDensity } from './density.js';
 import { applyColumnVisibility, showColumnPicker } from './columns.js';
+import { initGoalWidget } from './goals.js';
 import { requestNotificationPermission, canNotify } from './notifications.js';
 import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar, showBulkTagPicker } from './bulk.js';
 import { showSuggestionBanner } from './suggestion.js';
@@ -187,6 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initAccentPicker();
   initDensity();
   applyColumnVisibility();
+  initGoalWidget([]);
   initSessionBadge();
   initStreakBadge();
 
