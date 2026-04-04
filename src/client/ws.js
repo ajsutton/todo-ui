@@ -71,6 +71,7 @@ export function connectWebSocket() {
       appState.items = msg.data.items;
       appState.rawMarkdown = msg.data.rawMarkdown;
       appState.lastModified = msg.data.lastModified;
+      appState.dataLoaded = true;
       refreshStale();
       checkForNotifiableChanges(appState.items);
       renderTable();

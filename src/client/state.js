@@ -39,6 +39,9 @@ export const appState = {
   currentDetailHtml: null,
   detailEditMode: false,
 
+  // Loading state
+  dataLoaded: false,
+
   // Connection state
   ws: null,
   reconnectAttempts: 0,
