@@ -1651,3 +1651,20 @@ td.editable:hover {
   white-space: nowrap;
   pointer-events: none;
 }
+
+/* Urgency score badge in description cell */
+.urgency-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 20px;
+  text-align: center;
+  margin-right: 5px;
+  vertical-align: middle;
+  opacity: 0.7;
+  font-family: "SF Mono", "Fira Code", Menlo, monospace;
+}
+tr:hover .urgency-badge {
+  opacity: 1;
+}

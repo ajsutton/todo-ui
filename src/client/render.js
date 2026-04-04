@@ -6,6 +6,7 @@ import { filterItems, sortItems, filterSubItem } from './filters.js';
 import { showPriorityPicker, showSubPriorityPicker, showDatePicker } from './pickers.js';
 import { updateStaleTracker } from './stale.js';
 import { selection, isSelectionMode, toggleSelected } from './bulk.js';
+import { computeUrgency, urgencyColor } from './urgency.js';
 
 // Stale IDs maintained across renders
 let staleIds = new Set();
@@ -136,6 +137,18 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
     };
   }
   tdDesc.appendChild(toggle);
+
+  // Urgency badge (only for active, non-blocked items)
+  if (!isDone && !item.blocked) {
+    const score = computeUrgency(item);
+    const badge = document.createElement('span');
+    badge.className = 'urgency-badge';
+    badge.textContent = score;
+    badge.title = `Urgency score: ${score}/100`;
+    badge.style.color = urgencyColor(score);
+    tdDesc.appendChild(badge);
+  }
+
   const descSpan = document.createElement('span');
   descSpan.innerHTML = item.descriptionHtml;
   descSpan.querySelectorAll('a').forEach(a => {
