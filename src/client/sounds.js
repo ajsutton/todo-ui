@@ -35,8 +35,8 @@ export function initSoundBtn() {
   btn.addEventListener('click', toggleSound);
   updateSoundBtn();
 
-  const themeBtn = document.getElementById('theme-toggle');
-  if (themeBtn) themeBtn.parentNode.insertBefore(btn, themeBtn);
+  const anchor = document.getElementById('show-shortcuts');
+  if (anchor) anchor.parentNode.insertBefore(btn, anchor);
 }
 
 /**

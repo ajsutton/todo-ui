@@ -9,28 +9,17 @@ import { showLogDialog, closeLogDialog, loadLogPage } from './log.js';
 import { showStandupDialog, closeStandupDialog, switchStandupTab, copyStandupReport, generateStandupWithClaude } from './standup.js';
 import { sendClaudePrompt, handleClaudeStatus, pushHistory, resetHistoryNav, navigateHistory } from './claude.js';
 import { initKeyboard, showShortcutOverlay, closeShortcutOverlay } from './keyboard.js';
-import { initTheme, toggleTheme, initAccentPicker, showAccentPicker } from './theme.js';
+import { initTheme } from './theme.js';
 import { initSessionBadge } from './session.js';
 import { initStreakBadge } from './streak.js';
-import { initDensity } from './density.js';
 import { applyColumnVisibility, showColumnPicker } from './columns.js';
-import { initGoalWidget } from './goals.js';
 import { initSoundBtn } from './sounds.js';
 import { initTagCloud, showTagCloud } from './tagcloud.js';
 import { requestNotificationPermission, canNotify } from './notifications.js';
-import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar, showBulkTagPicker, showBulkDuePicker } from './bulk.js';
-import { showSuggestionBanner } from './suggestion.js';
-import { copyExport, downloadCsv } from './export.js';
-import { initHoverCards } from './hovercard.js';
 import { initQuickAdd } from './quickadd.js';
 import { initPalette } from './palette.js';
-import { toggleGroupBy, isGroupByMode } from './groupby.js';
-import { renderPresetsBar, showSavePresetDialog } from './presets.js';
 import { initSearchHistory, recordSearch, hideDropdown } from './searchhistory.js';
 import { initNewItem } from './newitem.js';
-import { showWeekView } from './weekview.js';
-import { showDigest } from './digest.js';
-import { showRecentsPopover } from './recents.js';
 
 function showUpdateDialog(results, discovered, errors) {
   errors = errors || [];
@@ -185,13 +174,10 @@ async function refreshAll() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Initialize theme, accent color, and session tracking
+  // Initialize theme and session tracking
   initTheme();
-  initAccentPicker();
-  initDensity();
   initSoundBtn();
   applyColumnVisibility();
-  initGoalWidget([]);
   initTagCloud();
   initSessionBadge();
   initStreakBadge();
@@ -406,105 +392,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Focus mode
-  const FOCUS_KEY = 'todo-focus-mode';
-  if (localStorage.getItem(FOCUS_KEY) === '1') document.body.classList.add('focus-mode');
-  document.getElementById('focus-mode-btn')?.addEventListener('click', () => {
-    const isNow = document.body.classList.toggle('focus-mode');
-    localStorage.setItem(FOCUS_KEY, isNow ? '1' : '0');
-  });
 
-  // Row density toggle
-  const DENSITY_KEY = 'todo-density';
-  const savedDensity = localStorage.getItem(DENSITY_KEY) || 'normal';
-  document.documentElement.dataset.density = savedDensity;
-  document.querySelectorAll('.density-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.density === savedDensity);
-    btn.addEventListener('click', () => {
-      const d = btn.dataset.density;
-      document.documentElement.dataset.density = d;
-      localStorage.setItem(DENSITY_KEY, d);
-      document.querySelectorAll('.density-btn').forEach(b => b.classList.toggle('active', b.dataset.density === d));
-    });
-  });
-
-  // Share URL
-  const shareBtn = document.getElementById('share-url');
-  if (shareBtn) {
-    shareBtn.addEventListener('click', () => {
-      navigator.clipboard?.writeText(location.href).then(() => {
-        const orig = shareBtn.textContent;
-        shareBtn.textContent = 'Copied!';
-        setTimeout(() => { shareBtn.textContent = orig; }, 1500);
-      }).catch(() => {
-        prompt('Copy this URL:', location.href);
-      });
-    });
-  }
-
-  // Export as Markdown
-  const exportBtn = document.getElementById('export-md');
-  if (exportBtn) {
-    exportBtn.addEventListener('click', async () => {
-      await copyExport();
-      const orig = exportBtn.textContent;
-      exportBtn.textContent = 'Copied!';
-      setTimeout(() => { exportBtn.textContent = orig; }, 1500);
-    });
-  }
-
-  // CSV download button
-  document.getElementById('export-csv')?.addEventListener('click', downloadCsv);
-
-  // "What's next?" suggestion
-  document.getElementById('show-next')?.addEventListener('click', showSuggestionBanner);
-
-  // Week view
-  document.getElementById('show-week')?.addEventListener('click', showWeekView);
-
-  // Daily brief digest
-  document.getElementById('show-digest')?.addEventListener('click', showDigest);
-
-  // Recent items button
-  const recentBtn = document.getElementById('recent-btn');
-  if (recentBtn) {
-    recentBtn.addEventListener('click', () => {
-      showRecentsPopover(recentBtn, (id) => showDetail(id));
-    });
-  }
-
-  // Saved filter presets
-  renderPresetsBar();
-  document.getElementById('save-preset-btn')?.addEventListener('click', showSavePresetDialog);
-
-  // Group-by toggle
-  const groupbyBtn = document.getElementById('groupby-toggle');
-  if (groupbyBtn) {
-    groupbyBtn.addEventListener('click', () => {
-      toggleGroupBy();
-      groupbyBtn.classList.toggle('active', isGroupByMode());
+  // Group-by select
+  const groupbySelect = document.getElementById('groupby-select');
+  if (groupbySelect) {
+    groupbySelect.value = appState.groupByMode || '';
+    groupbySelect.addEventListener('change', () => {
+      appState.groupByMode = groupbySelect.value || false;
+      syncUrl();
       renderTable();
     });
   }
 
   // Column visibility
   document.getElementById('columns-btn')?.addEventListener('click', (e) => showColumnPicker(e.currentTarget));
-
-  // Bulk mode
-  document.getElementById('bulk-mode-toggle')?.addEventListener('click', toggleBulkMode);
-  document.getElementById('bulk-mode-exit')?.addEventListener('click', toggleBulkMode);
-  document.querySelectorAll('[data-bulk-action]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const action = btn.dataset.bulkAction;
-      if (action === 'done') bulkMarkDone();
-      else if (action === 'active') bulkMarkActive();
-      else if (action === 'priority') bulkSetPriority(btn.dataset.priority);
-      else if (action === 'clear') clearSelection();
-      else if (action === 'tag') { showBulkTagPicker(btn); return; }
-      else if (action === 'due') { showBulkDuePicker(btn); return; }
-      renderBulkToolbar();
-    });
-  });
 
   // Notification toggle
   const notifBtn = document.getElementById('notif-toggle');
@@ -522,13 +423,6 @@ document.addEventListener('DOMContentLoaded', () => {
     updateNotifBtn();
   }
 
-  // Theme toggle
-  const themeBtn = document.getElementById('theme-toggle');
-  if (themeBtn) themeBtn.onclick = toggleTheme;
-
-  // Accent color picker
-  const accentBtn = document.getElementById('accent-btn');
-  if (accentBtn) accentBtn.onclick = () => showAccentPicker(accentBtn);
 
   // Keyboard shortcut overlay close button
   const overlayClose = document.getElementById('shortcut-overlay-close');
@@ -542,7 +436,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initKeyboard();
 
   // Initialize hover cards
-  initHoverCards();
 
   // Quick-add via paste
   initQuickAdd();
@@ -553,3 +446,5 @@ document.addEventListener('DOMContentLoaded', () => {
   // Quick-add new item form
   initNewItem();
 });
+
+// trigger

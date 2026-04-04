@@ -6,8 +6,6 @@ import { renderTable } from './render.js';
 import { syncUrl } from './url.js';
 import { showPriorityPicker, showDatePicker, showTypePicker } from './pickers.js';
 import { openNewItemForm, isFormOpen, closeNewItemForm } from './newitem.js';
-import { showWeekView, closeWeekView, isWeekViewOpen } from './weekview.js';
-import { showDigest, closeDigest, isDigestOpen } from './digest.js';
 
 function getVisibleRows() {
   return Array.from(document.querySelectorAll('#todo-body tr[data-item-id]'));
@@ -78,7 +76,6 @@ function doneSelected() {
       import('./sounds.js').then(({ playSound }) => playSound('undo'));
     } else {
       markComplete(id).then(() => {
-        import('./confetti.js').then(({ triggerConfetti }) => triggerConfetti(item.priority));
         import('./sounds.js').then(({ playSound }) => playSound('done'));
       });
     }
@@ -146,8 +143,6 @@ export function initKeyboard() {
 
     // Escape always closes things
     if (e.key === 'Escape') {
-      if (isDigestOpen()) { closeDigest(); return; }
-      if (isWeekViewOpen()) { closeWeekView(); return; }
       if (isShortcutOverlayOpen()) {
         closeShortcutOverlay();
         return;
@@ -226,11 +221,6 @@ export function initKeyboard() {
         e.preventDefault();
         toggleFocusMode();
         break;
-      case 'w':
-        e.preventDefault();
-        if (isWeekViewOpen()) closeWeekView();
-        else showWeekView();
-        break;
       case 'n':
         // Shift+N: quick note on selected; N alone: new item form
         if (e.shiftKey) {
@@ -251,24 +241,6 @@ export function initKeyboard() {
           else openNewItemForm();
         }
         break;
-      case 'r': {
-        // Refresh GitHub status of selected row
-        const rows4 = getVisibleRows();
-        if (appState.selectedRowIndex >= 0 && appState.selectedRowIndex < rows4.length) {
-          e.preventDefault();
-          const row = rows4[appState.selectedRowIndex];
-          const id = row.dataset.itemId;
-          const item = appState.items.find(i => i.id === id);
-          if (item?.githubUrl) {
-            // Flash the row
-            row.classList.add('row-refreshing');
-            fetch('/api/refresh/' + id, { method: 'POST' })
-              .catch(() => {})
-              .finally(() => row.classList.remove('row-refreshing'));
-          }
-        }
-        break;
-      }
       case 'c': {
         // Copy item to clipboard — rich format for PRs, plain for others
         const rows3 = getVisibleRows();
@@ -305,12 +277,8 @@ export function initKeyboard() {
           const id = row.dataset.itemId;
           const item = appState.items.find(i => i.id === id);
           if (item) {
-            // Priority cell: col 3 normally, col 4 in bulk mode (checkbox prepended)
-            import('./bulk.js').then(({ isSelectionMode }) => {
-              const offset = isSelectionMode() ? 1 : 0;
-              const priCell = row.cells[3 + offset];
-              if (priCell) showPriorityPicker(priCell, item);
-            });
+            const priCell = row.cells[3];
+            if (priCell) showPriorityPicker(priCell, item);
           }
         }
         break;

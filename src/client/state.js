@@ -10,6 +10,7 @@ function parseUrlParams(search) {
     sortDirection: p.get('dir') || 'asc',
     detailId: p.get('detail') || '',
     expanded: p.get('expanded') ? p.get('expanded').split(',') : [],
+    groupBy: p.get('groupby') || '',
   };
 }
 
@@ -33,6 +34,7 @@ export const appState = {
   filterType: urlParams.filterType,
   filterStatus: urlParams.filterStatus,
   searchQuery: urlParams.searchQuery,
+  groupByMode: urlParams.groupBy || false,
 
   // Detail panel state
   currentDetailRaw: null,

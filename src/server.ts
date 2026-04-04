@@ -145,6 +145,20 @@ async function runAutoUpdate(): Promise<void> {
   }
 }
 
+type WS = Bun.ServerWebSocket<unknown>;
+const clients = new Set<WS>();
+
+function broadcast(msg: WsMessage): void {
+  const payload = JSON.stringify(msg);
+  for (const ws of clients) {
+    try {
+      ws.send(payload);
+    } catch {
+      clients.delete(ws as WS);
+    }
+  }
+}
+
 async function runStandupAutoGeneration(): Promise<void> {
   if (standupAutoGenerating) return;
   standupAutoGenerating = true;
@@ -217,20 +231,6 @@ setTimeout(() => {
   runAutoUpdate();
   setInterval(runAutoUpdate, AUTO_UPDATE_INTERVAL_MS);
 }, firstDelay);
-
-type WS = Bun.ServerWebSocket<unknown>;
-const clients = new Set<WS>();
-
-function broadcast(msg: WsMessage): void {
-  const payload = JSON.stringify(msg);
-  for (const ws of clients) {
-    try {
-      ws.send(payload);
-    } catch {
-      clients.delete(ws as WS);
-    }
-  }
-}
 
 watcher.onStateChange((state) => {
   const detailIds = [...watcher.getDetailIds()];
@@ -652,19 +652,29 @@ const server = Bun.serve({
   },
 });
 
-// Watch client source for JS changes — rebuild bundle then reload browsers
-watch(CLIENT_SRC_DIR, { recursive: true }, async (_event, filename) => {
-  if (filename && filename.endsWith(".js")) {
-    await buildClientBundle();
+// Debounced rebuild — waits 15s after the last change before rebuilding/reloading
+let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingBundleRebuild = false;
+
+function scheduleReload(needsBundle: boolean) {
+  if (needsBundle) pendingBundleRebuild = true;
+  if (rebuildTimer) clearTimeout(rebuildTimer);
+  rebuildTimer = setTimeout(async () => {
+    rebuildTimer = null;
+    if (pendingBundleRebuild) {
+      pendingBundleRebuild = false;
+      await buildClientBundle();
+    }
     broadcast({ type: "reload" });
-  }
+  }, 15_000);
+}
+
+watch(CLIENT_SRC_DIR, { recursive: true }, (_event, filename) => {
+  if (filename && filename.endsWith(".js")) scheduleReload(true);
 });
 
-// Watch public dir for CSS/HTML changes — reload browsers directly
 watch(PUBLIC_DIR, { recursive: true }, (_event, filename) => {
-  if (filename && (filename.endsWith(".css") || filename.endsWith(".html"))) {
-    broadcast({ type: "reload" });
-  }
+  if (filename && (filename.endsWith(".css") || filename.endsWith(".html"))) scheduleReload(false);
 });
 
 console.log(`TODO UI server listening on http://${HOST}:${PORT}`);

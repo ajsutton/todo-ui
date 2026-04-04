@@ -2,7 +2,6 @@
 import { appState } from './state.js';
 import { syncUrl } from './url.js';
 import { staleDays } from './stale.js';
-import { recordView } from './recents.js';
 
 function renderDetailMeta(item) {
   let metaEl = document.getElementById('detail-meta');
@@ -71,7 +70,6 @@ export async function showDetail(id) {
   renderDetailMeta(item);
   content.innerHTML = '<p>Loading...</p>';
   panel.classList.add('visible');
-  recordView(id);
   syncUrl();
 
   try {

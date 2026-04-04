@@ -66,9 +66,7 @@ export function showContextMenu(e, item, row) {
       if (isDone) {
         markIncomplete(item.id);
       } else {
-        markComplete(item.id).then(() => {
-          import('./confetti.js').then(({ triggerConfetti }) => triggerConfetti(item.priority)).catch(() => {});
-        });
+        markComplete(item.id);
       }
     })
   ));

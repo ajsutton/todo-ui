@@ -26,6 +26,7 @@ export function syncUrl() {
   if (detailPanel && detailPanel.classList.contains('visible') && detailIdEl.textContent) {
     p.set('detail', detailIdEl.textContent);
   }
+  if (appState.groupByMode) p.set('groupby', appState.groupByMode);
   if (appState.expandedItems.size > 0) p.set('expanded', [...appState.expandedItems].join(','));
   const qs = p.toString();
   history.replaceState(null, '', qs ? '?' + qs : location.pathname);

@@ -8,9 +8,6 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div id="progress-bar-track" class="progress-bar-track" aria-hidden="true">
-    <div id="progress-bar-fill" class="progress-bar-fill"></div>
-  </div>
   <header>
     <div class="header-left">
       <h1>TODOs</h1>
@@ -19,17 +16,8 @@
     </div>
     <div class="actions">
       <span id="last-update" class="last-update"></span>
-      <button id="focus-mode-btn" class="btn-small" title="Focus mode — hide distractions">Focus</button>
       <button id="notif-toggle" class="btn-icon" title="Enable notifications" aria-label="Enable notifications">🔔</button>
-      <button id="theme-toggle" class="btn-icon" title="Toggle theme">🌙</button>
-      <button id="accent-btn" class="btn-icon accent-btn-swatch" title="Change accent color">🎨</button>
       <button id="show-shortcuts" class="btn-icon" title="Keyboard shortcuts">?</button>
-      <button id="share-url" class="btn-small" title="Copy shareable URL for current view">Share</button>
-      <button id="export-md" class="btn-small" title="Copy visible items as Markdown">Export MD</button>
-      <button id="export-csv" class="btn-small" title="Download visible items as CSV">CSV ↓</button>
-      <button id="show-next" class="btn-small" title="Smart suggestion for next action">What's next?</button>
-      <button id="show-week" class="btn-small" title="Week view — items due this week (w)">Week</button>
-      <button id="show-digest" class="btn-small" title="Daily brief summary">Brief</button>
       <button id="show-standup" class="btn-small">Standup</button>
       <a id="show-log" href="#" title="Update log">View Log</a>
       <div class="update-action">
@@ -55,17 +43,16 @@
       <option value="active" selected>Active</option>
       <option value="done">Done</option>
     </select>
-    <input type="search" id="filter-search" placeholder="Search… p:0 type:pr tag:name" autocomplete="off" title="Search: p:0, p:0-2, type:pr, status:failing, blocked, overdue, tag:name, or text">
-    <button id="recent-btn" class="btn-small" title="Recently viewed items">Recent</button>
-    <button id="save-preset-btn" class="btn-small" title="Save current filter as preset">⭐ Save filter</button>
-    <button id="bulk-mode-toggle" class="btn-small" title="Select multiple items">Select</button>
-    <button id="groupby-toggle" class="btn-small" title="Group items by priority">Group</button>
-    <button id="columns-btn" class="btn-small" title="Show/hide columns">Columns</button>
-    <div class="density-group" title="Row density">
-      <button class="density-btn" data-density="compact" title="Compact">▤</button>
-      <button class="density-btn active" data-density="normal" title="Normal">▦</button>
-      <button class="density-btn" data-density="spacious" title="Spacious">▧</button>
+    <div class="search-box">
+      <svg class="search-icon" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8.5" cy="8.5" r="5.5"/><line x1="13" y1="13" x2="18" y2="18"/></svg>
+      <input type="search" id="filter-search" autocomplete="off" title="Search: p:0, p:0-2, type:pr, status:failing, blocked, overdue, tag:name, or text">
     </div>
+    <select id="groupby-select" title="Group items">
+      <option value="">No grouping</option>
+      <option value="priority">Group: Priority</option>
+      <option value="type">Group: Type</option>
+    </select>
+    <button id="columns-btn" class="btn-small" title="Show/hide columns">Columns</button>
   </div>
 
   <div id="quick-filters" class="quick-filters" role="toolbar" aria-label="Quick filters">
@@ -81,25 +68,6 @@
   </div>
 
   <div id="stats-bar" class="stats-bar"></div>
-
-  <div id="bulk-toolbar" class="bulk-toolbar hidden">
-    <span class="bulk-count"></span>
-    <div class="bulk-actions">
-      <button data-bulk-action="done" class="btn-small" disabled>Mark Done</button>
-      <button data-bulk-action="active" class="btn-small" disabled>Mark Active</button>
-      <div class="bulk-priority-group">
-        <span class="bulk-label">Set priority:</span>
-        <button data-bulk-action="priority" data-priority="P0" class="btn-small priority-p0" disabled>P0</button>
-        <button data-bulk-action="priority" data-priority="P1" class="btn-small priority-p1" disabled>P1</button>
-        <button data-bulk-action="priority" data-priority="P2" class="btn-small priority-p2" disabled>P2</button>
-        <button data-bulk-action="priority" data-priority="P3" class="btn-small priority-p3" disabled>P3</button>
-      </div>
-      <button data-bulk-action="clear" class="btn-small">Clear</button>
-      <button data-bulk-action="tag" class="btn-small" disabled>🏷 Tag…</button>
-      <button data-bulk-action="due" class="btn-small" disabled>📅 Due…</button>
-    </div>
-    <button id="bulk-mode-exit" class="btn-small btn-secondary">Exit</button>
-  </div>
 
   <table id="todo-table">
     <thead>

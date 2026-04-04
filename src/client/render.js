@@ -5,18 +5,14 @@ import { typeLabel, priorityIcon, statusEmoji, TYPE_EMOJI } from './icons.js';
 import { filterItems, sortItems, filterSubItem, parseSearchQuery } from './filters.js';
 import { showPriorityPicker, showSubPriorityPicker, showDatePicker } from './pickers.js';
 import { updateStaleTracker, staleDays } from './stale.js';
-import { selection, isSelectionMode, toggleSelected } from './bulk.js';
 import { computeUrgency, urgencyColor } from './urgency.js';
 import { recordSnapshot, renderSparkline } from './history.js';
-import { renderTimerBtn, showTimerPicker, getTimerItemId } from './timer.js';
 import { isGroupByMode, groupItems, buildGroupHeaderRow, isGroupCollapsed } from './groupby.js';
-import { renderHeatmap } from './heatmap.js';
 import { sortWithPinned, togglePin, isPinned } from './pinned.js';
 import { renderTagPills, showTagPicker, getTagsForItem } from './tags.js';
 import { getSnoozedIds } from './snooze.js';
 import { pushUndo } from './undo.js';
 import { showContextMenu } from './contextmenu.js';
-import { applyDensity } from './density.js';
 import { applyColumnVisibility } from './columns.js';
 import { renderReactionBadges, showReactionPicker, hasReactions } from './reactions.js';
 import { hasNote, getNote, showNoteEditor } from './notes.js';
@@ -57,6 +53,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export function formatDueDate(due) {
   if (!due) return '';
   const now = new Date();
+  now.setHours(0, 0, 0, 0);
   const t = new Date(due + 'T00:00:00');
   const diffDays = Math.round((t - now) / 86400000);
   if (diffDays === 0) return 'Today';
@@ -92,20 +89,6 @@ function highlightTerms(html, terms) {
   });
 }
 
-function updateSearchBadge(shown, total) {
-  let badge = document.getElementById('search-count');
-  const searchEl = document.getElementById('filter-search');
-  if (!searchEl) return;
-  if (!badge) {
-    badge = document.createElement('span');
-    badge.id = 'search-count';
-    badge.className = 'search-count';
-    searchEl.parentElement?.insertBefore(badge, searchEl.nextSibling);
-  }
-  const isFiltered = shown < total || appState.filterType || appState.filterStatus !== 'active' || appState.searchQuery;
-  badge.textContent = isFiltered ? `${shown} / ${total}` : '';
-  badge.classList.toggle('hidden', !isFiltered || (shown === total && !appState.searchQuery && !appState.filterType));
-}
 
 function renderSkeletonTable() {
   const tbody = document.getElementById('todo-body');
@@ -125,7 +108,6 @@ function renderSkeletonTable() {
 
 export function renderTable() {
   if (!appState.dataLoaded) { renderSkeletonTable(); return; }
-  applyDensity();
   // Column visibility applied at end of render via applyColumnVisibility()
   const allItems = [...appState.items];
   const snoozed = getSnoozedIds();
@@ -141,7 +123,6 @@ export function renderTable() {
   items = sortItems(items, appState.sortColumn, appState.sortDirection, appState.sortKeys, computeUrgency);
   items = sortWithPinned(items);
 
-  updateSearchBadge(items.length, allItems.length);
   renderStats();
 
   const tbody = document.getElementById('todo-body');
@@ -158,7 +139,7 @@ export function renderTable() {
   appState.selectedRowIndex = -1;
 
   // Determine column count for group header colspan
-  const colSpan = isSelectionMode() ? 7 : 6;
+  const colSpan = 7;
 
   function appendItem(item) {
     const hasSubItems = appState.subItemCache.has(item.id);
@@ -213,18 +194,6 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
   };
   tr.oncontextmenu = (e) => showContextMenu(e, item, tr);
 
-  // Checkbox cell (bulk mode only)
-  if (isSelectionMode()) {
-    const tdCheck = document.createElement('td');
-    tdCheck.className = 'check-cell';
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = selection.has(item.id);
-    cb.onclick = (e) => { e.stopPropagation(); toggleSelected(item.id); cb.checked = selection.has(item.id); };
-    tdCheck.appendChild(cb);
-    tr.appendChild(tdCheck);
-  }
-
   // Type cell
   const tdType = document.createElement('td');
   tdType.classList.add('type-cell');
@@ -243,40 +212,8 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
       toggleExpand(item.id);
     };
 
-    // Sub-item progress bar
-    const subs = appState.subItemCache.get(item.id) || [];
-    if (subs.length > 0) {
-      const done = subs.filter(s => {
-        const sl = (s.currentStatus || '').toLowerCase();
-        return sl.includes('merged') || sl.includes('closed');
-      }).length;
-      const pct = Math.round((done / subs.length) * 100);
-      const prog = document.createElement('span');
-      prog.className = 'sub-progress';
-      prog.title = `${done} / ${subs.length} sub-items done`;
-      const fill = document.createElement('span');
-      fill.className = 'sub-progress-fill';
-      fill.style.width = pct + '%';
-      const label = document.createElement('span');
-      label.className = 'sub-progress-label';
-      label.textContent = `${done}/${subs.length}`;
-      prog.appendChild(fill);
-      prog.appendChild(label);
-      tdDesc.appendChild(prog);
-    }
   }
   tdDesc.appendChild(toggle);
-
-  // Urgency badge (only for active, non-blocked items)
-  if (!isDone && !item.blocked) {
-    const score = computeUrgency(item);
-    const badge = document.createElement('span');
-    badge.className = 'urgency-badge';
-    badge.textContent = score;
-    badge.title = `Urgency score: ${score}/100`;
-    badge.style.color = urgencyColor(score);
-    tdDesc.appendChild(badge);
-  }
 
   const descSpan = document.createElement('span');
   descSpan.className = 'desc-text';
@@ -376,6 +313,30 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
     tdDesc.appendChild(tagContainer);
   }
 
+  // Sub-item progress bar (right-aligned)
+  if (hasSubItems) {
+    const subs = appState.subItemCache.get(item.id) || [];
+    if (subs.length > 0) {
+      const done = subs.filter(s => {
+        const sl = (s.currentStatus || '').toLowerCase();
+        return sl.includes('merged') || sl.includes('closed');
+      }).length;
+      const pct = Math.round((done / subs.length) * 100);
+      const prog = document.createElement('span');
+      prog.className = 'sub-progress';
+      prog.title = `${done} / ${subs.length} sub-items done`;
+      const fill = document.createElement('span');
+      fill.className = 'sub-progress-fill';
+      fill.style.width = pct + '%';
+      const label = document.createElement('span');
+      label.className = 'sub-progress-label';
+      label.textContent = `${done}/${subs.length}`;
+      prog.appendChild(fill);
+      prog.appendChild(label);
+      tdDesc.appendChild(prog);
+    }
+  }
+
   tr.appendChild(tdDesc);
 
   // Status cell with rich color coding
@@ -447,8 +408,9 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
   actionsWrap.className = 'actions-wrap';
 
   const toggleBtn = document.createElement('button');
-  toggleBtn.textContent = isDone ? 'Undo' : 'Done';
-  toggleBtn.className = 'btn-small';
+  toggleBtn.textContent = isDone ? '↩️' : '✅';
+  toggleBtn.className = 'btn-small btn-icon-inline';
+  toggleBtn.title = isDone ? 'Mark active' : 'Mark done';
   toggleBtn.onclick = (e) => {
     e.stopPropagation();
     import('./actions.js').then(({ markComplete, markIncomplete }) => {
@@ -456,37 +418,12 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
         markIncomplete(item.id);
         pushUndo(`Marked "${truncateDesc(item)}" active`, () => markComplete(item.id));
       } else {
-        markComplete(item.id).then(() => {
-          import('./confetti.js').then(({ triggerConfetti }) => triggerConfetti(item.priority));
-        });
+        markComplete(item.id);
         pushUndo(`Marked "${truncateDesc(item)}" done`, () => markIncomplete(item.id));
       }
     });
   };
   actionsWrap.appendChild(toggleBtn);
-
-  // Refresh button for items with a GitHub URL (PRs/Reviews)
-  if (item.githubUrl && !isDone) {
-    const refreshBtn = document.createElement('button');
-    refreshBtn.textContent = '↻';
-    refreshBtn.className = 'btn-small btn-icon-inline';
-    refreshBtn.title = 'Refresh PR status';
-    refreshBtn.onclick = async (e) => {
-      e.stopPropagation();
-      refreshBtn.disabled = true;
-      refreshBtn.textContent = '…';
-      try {
-        const res = await fetch('/api/refresh/' + item.id, { method: 'POST' });
-        if (!res.ok) throw new Error(await res.text());
-      } catch (err) {
-        console.error('Refresh failed:', err);
-      } finally {
-        refreshBtn.disabled = false;
-        refreshBtn.textContent = '↻';
-      }
-    };
-    actionsWrap.appendChild(refreshBtn);
-  }
 
   // Tag button
   const tagBtn = document.createElement('button');
@@ -527,27 +464,6 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
       });
     };
     actionsWrap.appendChild(snoozeBtn);
-  }
-
-  // Focus timer button
-  if (!isDone) {
-    const timerBtn = document.createElement('button');
-    const isActive = getTimerItemId() === item.id;
-    timerBtn.textContent = '🍅';
-    timerBtn.className = 'btn-small btn-icon-inline timer-btn' + (isActive ? ' timer-active' : '');
-    timerBtn.title = isActive ? 'Stop focus timer' : 'Start focus timer';
-    timerBtn.onclick = (e) => {
-      e.stopPropagation();
-      import('./timer.js').then(({ showTimerPicker, stopTimer, getTimerItemId }) => {
-        if (getTimerItemId() === item.id) {
-          stopTimer();
-          import('./render.js').then(m => m.renderTable());
-        } else {
-          showTimerPicker(item.id, item.description || item.id, timerBtn);
-        }
-      });
-    };
-    actionsWrap.appendChild(timerBtn);
   }
 
   tdActions.appendChild(actionsWrap);
@@ -602,6 +518,9 @@ export function buildSubItemRow(sub, parentId) {
   const tdDue = document.createElement('td');
   tr.appendChild(tdDue);
 
+  const tdUrgency = document.createElement('td');
+  tr.appendChild(tdUrgency);
+
   const tdActions = document.createElement('td');
   tr.appendChild(tdActions);
 
@@ -648,6 +567,7 @@ export function renderStats() {
   const blocked = active.filter(i => i.blocked);
   const t = today();
   const overdue = active.filter(i => i.due && i.due < t);
+  const snoozed = getSnoozedIds();
   const highPriority = active.filter(i => i.priority === 'P0' || i.priority === 'P1');
 
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
@@ -656,18 +576,6 @@ export function renderStats() {
   const totalCount = all.length;
   const donePercent = totalCount > 0 ? Math.round((done.length / totalCount) * 100) : 0;
 
-  // Top progress bar
-  const progressFill = document.getElementById('progress-bar-fill');
-  if (progressFill) {
-    progressFill.style.width = donePercent + '%';
-    progressFill.title = `${done.length} of ${totalCount} items done (${donePercent}%)`;
-    // Color shifts from accent → green as completion increases
-    progressFill.style.background = donePercent >= 80
-      ? 'var(--status-pass, #22c55e)'
-      : donePercent >= 50
-        ? 'color-mix(in srgb, var(--status-pass, #22c55e) 50%, var(--accent))'
-        : 'var(--accent)';
-  }
 
   const typeOrder = ['Review', 'PR', 'Issue', 'Workstream'];
   const typeCounts = {};
@@ -729,12 +637,8 @@ export function renderStats() {
       <span class="stats-row-label">Priority</span>
       ${segmentedBar(priEntries, active.length, p => priColors[p] || 'var(--fg-secondary)', 'priority', null)}
     </div>
-    <div class="stats-alerts">${alerts.join('')}<span id="heatmap-container"></span></div>
+    <div class="stats-alerts">${alerts.join('')}</div>
   `;
-
-  // Render heatmap into its container
-  const heatmapContainer = document.getElementById('heatmap-container');
-  if (heatmapContainer) renderHeatmap(heatmapContainer);
 
   // Wire up segment click filtering
   bar.querySelectorAll('[data-filter-key]').forEach(el => {
@@ -826,3 +730,5 @@ export function showAutoAddedNotice(data) {
   document.body.appendChild(notice);
   setTimeout(() => notice.remove(), 5000);
 }
+
+// rebuild
