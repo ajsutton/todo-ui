@@ -20,6 +20,7 @@ import { initPalette } from './palette.js';
 import { toggleGroupBy, isGroupByMode } from './groupby.js';
 import { renderPresetsBar, showSavePresetDialog } from './presets.js';
 import { initSearchHistory, recordSearch, hideDropdown } from './searchhistory.js';
+import { initNewItem } from './newitem.js';
 
 function showUpdateDialog(results, discovered, errors) {
   errors = errors || [];
@@ -422,4 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Command palette (Cmd+K / Ctrl+K)
   initPalette();
+
+  // Quick-add new item form
+  initNewItem();
 });
