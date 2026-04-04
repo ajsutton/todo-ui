@@ -45,7 +45,7 @@ The user may say things like:
 
 ## Rules
 
-- **New PRs and review requests are auto-added** during both background (15-min interval) and foreground (`/todo update`) refreshes. The server discovers untracked items and adds them automatically — no user confirmation needed.
+- **New PRs, review requests, and assigned issues are auto-added** during both background (15-min interval) and foreground (`/todo update`) refreshes. The server discovers untracked items and adds them automatically — no user confirmation needed.
 - **Never perform the next step on a TODO** without explicit request or confirmation from the user.
 - **Be conservative with GitHub API** to avoid rate limits. Batch queries where possible.
 - **Keep TODO.md minimal** — one line per item in a table. All general queries should be answerable from TODO.md alone.
@@ -112,7 +112,7 @@ When performing a full status check (`/todo update`):
 4. For each active item (empty Done column), update status based on type:
    - **General**: Leave as-is (no API to check).
    - **Workstream**: Read the detail file, check each PR's GitHub status from the batch results, update the detail file and summary in TODO.md.
-   - **Issue**: Update from GitHub issue state. If closed, set Done date.
+   - **Issue**: Update from GitHub issue state. If the issue has a detail file with linked PRs, update the PR table statuses and recompute the issue's summary status and priority (see Issue type below). If the issue is closed, set Done date.
    - **PR**: Update from GitHub PR state:
      - Merged → set Done date, status "Merged"
      - Closed → set Done date, status "Closed"
@@ -129,18 +129,19 @@ When performing a full status check (`/todo update`):
    - PR/Workstream items with PRs that are approved + CI passing → escalate to P1 (quick wins, just need to merge)
    - Review items for draft/CI-failing/conflicted PRs → P3
    - Blocked items → P5
+   - Issue items with no linked PRs → P4 (not started); with linked PRs → highest priority among them, minimum P3
 6. Write all changes to TODO.md in a single edit.
 7. Report a summary of changes to the user — only mention items whose status actually changed.
 
 #### Discovering New Items
 
-After updating existing items, scan GitHub for PRs and review requests not already tracked:
+After updating existing items, scan GitHub for PRs, review requests, and assigned issues not already tracked:
 
 1. **User's open PRs:** Query for the user's open PRs across relevant orgs:
    ```
    gh api 'search/issues?q=author:USERNAME+is:open+is:pr+org:ORG&per_page=50'
    ```
-   For each PR found, check if it's already tracked in TODO.md (match by repo and PR number in any Description, or in any workstream detail file). Skip PRs that are already tracked.
+   For each PR found, check if it's already tracked in TODO.md (match by repo and PR number in any Description, or in any workstream/issue detail file). Skip PRs that are already tracked.
 
 2. **Pending review requests:** Query for PRs where the user is individually requested:
    ```
@@ -148,9 +149,13 @@ After updating existing items, scan GitHub for PRs and review requests not alrea
    ```
    Skip PRs already tracked as Review items.
 
-3. **Present new items to the user** with proposed type, priority, and description. Wait for confirmation before adding any. Group by category (your PRs, review requests) for readability.
+3. **Assigned issues:** Query for open issues assigned to the user:
+   ```
+   gh api 'search/issues?q=assignee:USERNAME+is:open+is:issue+org:ORG&per_page=50'
+   ```
+   Skip issues already tracked. For each new issue, search for linked PRs using the GitHub timeline API and create a detail file with the PR table if linked PRs exist. Set priority to P4 if there are no linked PRs (work not started), or the highest of the linked PR priorities with a P3 floor if there are (work in progress).
 
-4. Add confirmed items to TODO.md and create detail files where useful.
+4. **All new items are auto-added immediately** — no user confirmation needed. The server handles this automatically.
 
 ### Working on a TODO
 
@@ -188,9 +193,9 @@ A body of work that may span multiple PRs. Similar to a GitHub issue but may not
 <link, or "None — consider creating one">
 
 ## PRs
-| PR | Title | Status |
-|----|-------|--------|
-| repo#123 | description | Merged/Open/Approved/Draft |
+| PR | Title | Status | Priority |
+|----|-------|--------|----------|
+| [repo#123](url) | description | Merged/Open/Approved/Draft | P2 |
 
 ## Remaining Work
 - [ ] next thing to do
@@ -221,16 +226,37 @@ If any invariant is violated during a status update, clear the Done date and set
 
 **Status updates:** When checking status, look up each PR in the detail file and update its status — including review/approval state (use `get_reviews` or check `mergeable_state`). PRs that are approved should be marked "Approved" so they surface as ready to merge rather than needing reviews. Summarize progress in the main TODO.md row.
 
-### Issue / PR
-**Issues:**
+### Issue
+
+An issue assigned to the user. Issues can have linked PRs that are tracked as sub-items in a detail file.
+
+**Detail file format for issues with linked PRs:**
+```markdown
+# <Issue title>
+
+## Issue
+[repo#number](url)
+
+## PRs
+| PR | Title | Status | Priority |
+|----|-------|--------|----------|
+| [repo#123](url) | PR title | Open/Draft/Merged | P2 |
+```
+
+**Priority propagation:** An issue with no linked PRs gets P4 (work not started). An issue with linked PRs gets the highest (lowest P-number) of its linked PR priorities, with a P3 floor (work in progress). When a linked PR's priority changes, the issue's priority should be recomputed. Draft PRs default to P3, open PRs default to P2.
+
+**Auto-discovery of linked PRs:** When an issue is discovered during a scan, the server queries the GitHub timeline API for cross-referenced open PRs and creates the detail file automatically. PRs that reference the issue are tracked as sub-items.
+
+**Lifecycle:**
 1. Brainstorm (`/op:brainstorm`)
 2. Plan (`/op:plan`)
-3. Execute the plan
-4. Create a draft PR → then follow PR lifecycle
+3. Execute the plan — create PRs that reference the issue
+4. PRs are tracked as sub-items in the detail file
+5. Done when the GitHub issue is closed
 
-One issue may spawn multiple PRs. Track follow-up work in the detail file. If an issue has enough scope to warrant multiple PRs, consider promoting it to a Workstream.
+One issue may spawn multiple PRs. If an issue has enough scope to warrant a broader tracking structure, consider promoting it to a Workstream.
 
-**PRs:**
+### PR
 A standalone PR not part of any workstream or issue. If a PR relates to an existing workstream or issue TODO, it should be tracked there instead of having its own entry.
 
 - Draft → mark ready for review
@@ -293,6 +319,18 @@ The file uses this structure:
 |----|-------------|------|--------|----------|-----|------|
 ```
 
+### Detail File PR Table Format
+
+All detail files (workstreams, issues) that track sub-item PRs use this table format:
+
+```markdown
+| PR | Title | Status | Priority |
+|----|-------|--------|----------|
+| [repo#123](url) | PR title | Open/Draft/Merged/Closed | P2 |
+```
+
+The Priority column is optional — it will be added automatically when a sub-item's priority is first set. The server parses these tables to update PR statuses and compute parent priority.
+
 ### Done Column
 
 The `Done` column holds the date (YYYY-MM-DD) when a TODO was marked as done. **The presence of a date in this column is the canonical indicator that a task is complete** — the Status column remains free-form and can say anything (e.g., "Merged", "Complete (approved)", "Closed").
@@ -308,7 +346,9 @@ Rules:
 
 - TODO.md is the single source of truth for all queries
 - Detail files are supplementary, not required
-- New PRs and review requests are auto-added during updates
+- New PRs, review requests, and assigned issues are auto-added during updates (no confirmation needed)
+- Assigned issues automatically get detail files with linked PRs when discovered
+- Issue priority = highest of linked PR priorities, minimum P3
 - Never auto-advance work without confirmation
 - Priority guidelines evolve based on user preferences
 - Conservative GitHub API usage

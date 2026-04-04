@@ -7,6 +7,7 @@ import {
   markIncomplete,
   setPriority,
   setDue,
+  setSubItemPriority,
   refreshPrStatus,
   updateAll,
   addDiscoveredItems,
@@ -109,7 +110,18 @@ async function runAutoUpdate(): Promise<void> {
   }
 }
 
-setInterval(runAutoUpdate, AUTO_UPDATE_INTERVAL_MS);
+// Schedule first update based on time since last auto-update
+const recentLog = getLogEntries(watcher.getDir(), 1, 0);
+const lastEntry = recentLog.entries[0];
+const msSinceLast = lastEntry
+  ? Date.now() - new Date(lastEntry.timestamp).getTime()
+  : AUTO_UPDATE_INTERVAL_MS;
+const firstDelay = Math.max(0, AUTO_UPDATE_INTERVAL_MS - msSinceLast);
+console.log(`Next auto-update in ${Math.round(firstDelay / 1000)}s`);
+setTimeout(() => {
+  runAutoUpdate();
+  setInterval(runAutoUpdate, AUTO_UPDATE_INTERVAL_MS);
+}, firstDelay);
 
 type WS = Bun.ServerWebSocket<unknown>;
 const clients = new Set<WS>();
@@ -126,7 +138,8 @@ function broadcast(msg: WsMessage): void {
 }
 
 watcher.onStateChange((state) => {
-  broadcast({ type: "state", data: state });
+  const detailIds = [...watcher.getDetailIds()];
+  broadcast({ type: "state", data: { ...state, detailIds } });
 });
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -169,7 +182,19 @@ const server = Bun.serve({
 
     // API routes
     if (req.method === "GET" && pathname === "/api/state") {
-      return jsonResponse(watcher.getState());
+      const state = watcher.getState();
+      const detailIds = watcher.getDetailIds();
+      return jsonResponse({
+        ...state,
+        detailIds: [...detailIds],
+      });
+    }
+
+    if (req.method === "GET" && pathname.startsWith("/api/sub-items/")) {
+      const id = extractIdFromPath(pathname, "/api/sub-items/");
+      if (!id) return jsonResponse({ error: "Missing id" }, 400);
+      const refs = watcher.getSubItems(id);
+      return jsonResponse({ id, subItems: refs });
     }
 
     if (req.method === "GET" && pathname.startsWith("/api/detail/")) {
@@ -228,6 +253,23 @@ const server = Bun.serve({
         const body = (await req.json()) as { priority?: string };
         if (!body.priority) return jsonResponse({ error: "Missing priority" }, 400);
         setPriority(watcher.getDir(), id, body.priority);
+        watcher.reload();
+        return jsonResponse({ ok: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return jsonResponse({ error: message }, 400);
+      }
+    }
+
+    if (req.method === "POST" && pathname.startsWith("/api/sub-priority/")) {
+      const parentId = extractIdFromPath(pathname, "/api/sub-priority/");
+      if (!parentId) return jsonResponse({ error: "Missing id" }, 400);
+      try {
+        const body = (await req.json()) as { repo?: string; number?: number; priority?: string };
+        if (!body.repo || !body.number || !body.priority) {
+          return jsonResponse({ error: "Missing repo, number, or priority" }, 400);
+        }
+        setSubItemPriority(watcher.getDir(), parentId, body.repo, body.number, body.priority);
         watcher.reload();
         return jsonResponse({ ok: true });
       } catch (err) {
@@ -320,7 +362,7 @@ const server = Bun.serve({
             data: { requestId, status: "running", output: "" },
           });
 
-          for await (const chunk of runClaudePrompt(CLAUDE_CWD, body.prompt!)) {
+          for await (const chunk of runClaudePrompt(watcher.getDir(), body.prompt!)) {
             if (chunk.kind === "text") {
               broadcast({
                 type: "claude-status",
@@ -425,7 +467,8 @@ const server = Bun.serve({
     open(ws) {
       clients.add(ws as WS);
       const state = watcher.getState();
-      ws.send(JSON.stringify({ type: "state", data: state } satisfies WsMessage));
+      const detailIds = [...watcher.getDetailIds()];
+      ws.send(JSON.stringify({ type: "state", data: { ...state, detailIds } }));
     },
     close(ws) {
       clients.delete(ws as WS);

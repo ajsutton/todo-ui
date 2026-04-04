@@ -1,7 +1,8 @@
-import { watch, readFileSync, existsSync, type FSWatcher } from "node:fs";
+import { watch, readFileSync, existsSync, readdirSync, type FSWatcher } from "node:fs";
 import path from "node:path";
 import { parseTodoMarkdown } from "./parser.ts";
 import { renderMarkdown } from "./markdown.ts";
+import { parseDetailPrRefs, type DetailPrRef } from "./actions.ts";
 import type { TodoState, DetailFile } from "../types.ts";
 
 export class TodoWatcher {
@@ -109,6 +110,26 @@ export class TodoWatcher {
       }, 100);
     });
     this.notifyAll();
+  }
+
+  getSubItems(id: string): DetailPrRef[] {
+    const detail = this.getDetail(id);
+    if (!detail) return [];
+    return parseDetailPrRefs(detail.content);
+  }
+
+  getDetailIds(): Set<string> {
+    const ids = new Set<string>();
+    try {
+      const files = readdirSync(this.todoDir);
+      for (const f of files) {
+        const match = f.match(/^(TODO-\d+)\.md$/);
+        if (match) ids.add(match[1]!);
+      }
+    } catch {
+      // Directory might not exist yet
+    }
+    return ids;
   }
 
   getDir(): string {

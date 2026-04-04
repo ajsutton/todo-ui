@@ -8,6 +8,7 @@ function getUrlParams() {
     sortColumn: p.get('sort') || 'priority',
     sortDirection: p.get('dir') || 'asc',
     detailId: p.get('detail') || '',
+    expanded: p.get('expanded') ? p.get('expanded').split(',') : [],
   };
 }
 
@@ -19,10 +20,11 @@ function syncUrl() {
   if (sortColumn !== 'priority') p.set('sort', sortColumn);
   if (sortDirection !== 'asc') p.set('dir', sortDirection);
   const detailPanel = document.getElementById('detail-panel');
-  const detailTitle = document.getElementById('detail-title');
-  if (detailPanel && detailPanel.classList.contains('visible') && detailTitle.textContent) {
-    p.set('detail', detailTitle.textContent);
+  const detailIdEl = document.getElementById('detail-id');
+  if (detailPanel && detailPanel.classList.contains('visible') && detailIdEl.textContent) {
+    p.set('detail', detailIdEl.textContent);
   }
+  if (expandedItems.size > 0) p.set('expanded', [...expandedItems].join(','));
   const qs = p.toString();
   history.replaceState(null, '', qs ? '?' + qs : location.pathname);
 }
@@ -40,6 +42,9 @@ let reconnectAttempts = 0;
 let currentDetailRaw = null;
 let currentDetailHtml = null;
 let detailEditMode = false;
+let detailIds = new Set();          // IDs that have detail files
+let expandedItems = new Set(urlParams.expanded); // IDs currently expanded to show sub-items
+let subItemCache = new Map();       // id -> sub-items array
 
 // Prompt history (persisted in localStorage)
 const HISTORY_KEY = 'claude-prompt-history';
@@ -82,8 +87,11 @@ function connectWebSocket() {
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
     if (msg.type === 'state') {
+      if (msg.data.detailIds) detailIds = new Set(msg.data.detailIds);
+      subItemCache.clear(); // detail files may have changed
       state = msg.data;
       renderTable();
+      prefetchSubItems();
       refreshOpenDetail();
     } else if (msg.type === 'update-progress') {
       handleUpdateProgress(msg.data);
@@ -99,6 +107,14 @@ function connectWebSocket() {
       window._reloadTimer = setTimeout(() => location.reload(), 10000);
     }
   };
+}
+
+// Display name helper — strips markdown link prefix to show human-readable description
+function itemDisplayName(item) {
+  const title = (item.description || '').replace(/^\[.*?\]\(.*?\)\s*/, '');
+  if (title) return title;
+  if (item.repo && item.prNumber) return item.repo.replace('ethereum-optimism/', '') + '#' + item.prNumber;
+  return item.id || 'Unknown';
 }
 
 // Stats
@@ -122,56 +138,63 @@ function renderStats() {
   const totalCount = all.length;
   const donePercent = totalCount > 0 ? Math.round((done.length / totalCount) * 100) : 0;
 
-  // Type breakdown for subtitle
-  const reviews = active.filter(i => i.type === 'Review').length;
-  const prs = active.filter(i => i.type === 'PR').length;
+  // Type breakdown
+  const typeOrder = ['Review', 'PR', 'Issue', 'Workstream'];
+  const typeCounts = {};
+  for (const i of active) {
+    const t = i.type || 'Other';
+    typeCounts[t] = (typeCounts[t] || 0) + 1;
+  }
+  const typeEntries = typeOrder.filter(t => typeCounts[t]).map(t => [t, typeCounts[t]]);
+  for (const [t, n] of Object.entries(typeCounts)) {
+    if (!typeOrder.includes(t)) typeEntries.push([t, n]);
+  }
 
-  const cards = [
-    {
-      value: active.length,
-      label: 'Active',
-      cls: 'stat-active',
-      sub: reviews || prs ? `${reviews} reviews, ${prs} PRs` : '',
-    },
-    {
-      value: highPriority.length,
-      label: 'High Priority',
-      cls: highPriority.length > 0 ? 'stat-p1' : '',
-      sub: 'P0 + P1',
-    },
-    {
-      value: blocked.length,
-      label: 'Blocked',
-      cls: blocked.length > 0 ? 'stat-blocked' : '',
-      sub: blocked.length > 0 ? blocked.map(i => i.id).slice(0, 3).join(', ') : 'None',
-    },
-    {
-      value: overdue.length,
-      label: 'Overdue',
-      cls: overdue.length > 0 ? 'stat-overdue' : '',
-      sub: overdue.length > 0 ? overdue.map(i => i.id).slice(0, 3).join(', ') : 'All on track',
-    },
-    {
-      value: doneThisWeek.length,
-      label: 'Done This Week',
-      cls: 'stat-done',
-      sub: `${donePercent}% total completion`,
-      bar: { percent: donePercent, color: 'var(--status-pass)' },
-    },
-  ];
+  // Priority breakdown
+  const priorityOrder = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5'];
+  const priCounts = {};
+  for (const i of active) {
+    const p = i.priority || 'None';
+    priCounts[p] = (priCounts[p] || 0) + 1;
+  }
+  const priEntries = priorityOrder.filter(p => priCounts[p]).map(p => [p, priCounts[p]]);
+  if (priCounts['None']) priEntries.push(['None', priCounts['None']]);
 
-  bar.innerHTML = cards.map(c => `
-    <div class="stat-card">
-      <span class="stat-value ${c.cls}">${c.value}</span>
-      <span class="stat-label">${c.label}</span>
-      ${c.sub ? `<span class="stat-sub">${c.sub}</span>` : ''}
-      ${c.bar ? `<div class="stat-bar-track"><div class="stat-bar-fill" style="width:${c.bar.percent}%;background:${c.bar.color}"></div></div>` : ''}
+  const typeColors = { Review: 'var(--accent)', PR: 'var(--status-pass)', Issue: 'var(--p2)', Workstream: 'var(--p3)' };
+  const priColors = { P0: 'var(--p0)', P1: 'var(--p1)', P2: 'var(--p2)', P3: 'var(--p3)', P4: 'var(--p4)', P5: 'var(--p5)' };
+
+  function segmentedBar(entries, total, colorFn) {
+    if (total === 0) return '<div class="seg-bar"></div>';
+    return '<div class="seg-bar">' + entries.map(([label, count]) => {
+      const pct = (count / total) * 100;
+      return `<div class="seg" style="width:${pct}%;background:${colorFn(label)}">
+        <span class="seg-label">${count} ${label}</span>
+      </div>`;
+    }).join('') + '</div>';
+  }
+
+  // Alerts as inline items
+  const alerts = [];
+  if (blocked.length > 0) alerts.push(`<span class="stat-alert stat-blocked">${blocked.length} blocked</span>`);
+  if (overdue.length > 0) alerts.push(`<span class="stat-alert stat-overdue">${overdue.length} overdue</span>`);
+  alerts.push(`<span class="stat-alert stat-done">${doneThisWeek.length} done this week</span>`);
+  alerts.push(`<span class="stat-alert-muted">${donePercent}% complete</span>`);
+
+  bar.innerHTML = `
+    <div class="stats-row">
+      <span class="stats-row-label">${active.length} active</span>
+      ${segmentedBar(typeEntries, active.length, t => typeColors[t] || 'var(--fg-secondary)')}
     </div>
-  `).join('');
+    <div class="stats-row">
+      <span class="stats-row-label">Priority</span>
+      ${segmentedBar(priEntries, active.length, p => priColors[p] || 'var(--fg-secondary)')}
+    </div>
+    <div class="stats-alerts">${alerts.join('')}</div>
+  `;
 }
 
 // Icon helpers
-const TYPE_EMOJI = { Review: '👀', PR: '🔀', Workstream: '🏗️', Issue: '🐛' };
+const TYPE_EMOJI = { Review: '👀', PR: '🔀', Workstream: '🏗️', Issue: '📋' };
 
 function typeLabel(t) {
   return TYPE_EMOJI[t] || '📌';
@@ -227,91 +250,234 @@ function renderTable() {
   syncUrl();
 
   for (const item of items) {
-    const tr = document.createElement('tr');
-    const isDone = !!item.doneDate;
-    if (isDone) tr.classList.add('status-done');
-    if (item.blocked) tr.classList.add('status-blocked');
-    tr.onclick = () => showDetail(item.id);
+    const hasSubItems = subItemCache.has(item.id);
+    const isExpanded = expandedItems.has(item.id);
 
-    // ID cell
-    const tdId = document.createElement('td');
-    tdId.textContent = item.id;
-    tr.appendChild(tdId);
-
-    // Description cell - use descriptionHtml which has <a> tags
-    const tdDesc = document.createElement('td');
-    tdDesc.innerHTML = item.descriptionHtml;
-    // Make links open in new tab and stop propagation
-    tdDesc.querySelectorAll('a').forEach(a => {
-      a.target = '_blank';
-      a.rel = 'noopener';
-      a.onclick = (e) => e.stopPropagation();
-    });
-    tr.appendChild(tdDesc);
-
-    // Status cell (moved before Type)
-    const tdStatus = document.createElement('td');
-    const sEmoji = statusEmoji(item);
-    tdStatus.textContent = (sEmoji ? sEmoji + ' ' : '') + item.status;
-    if (item.status.toLowerCase().includes('failing')) tdStatus.classList.add('status-failing');
-    if (item.status.toLowerCase().includes('passing')) tdStatus.classList.add('status-passing');
-    tr.appendChild(tdStatus);
-
-    // Type cell — emoji only, text on hover
-    const tdType = document.createElement('td');
-    tdType.classList.add('type-cell');
-    tdType.innerHTML = `<span class="type-icon" title="${item.type}">${typeLabel(item.type)}</span>`;
-    tr.appendChild(tdType);
-
-    // Priority cell — click to cycle
-    const tdPriority = document.createElement('td');
-    tdPriority.innerHTML = priorityIcon(item.priority) + ' ' + item.priority;
-    tdPriority.classList.add('priority-' + item.priority.toLowerCase());
-    tdPriority.classList.add('editable');
-    tdPriority.onclick = (e) => {
-      e.stopPropagation();
-      showPriorityPicker(tdPriority, item);
-    };
-    tr.appendChild(tdPriority);
-
-    // Due cell — click to edit
-    const tdDue = document.createElement('td');
-    tdDue.textContent = item.due;
-    tdDue.classList.add('editable');
-    tdDue.onclick = (e) => {
-      e.stopPropagation();
-      showDatePicker(tdDue, item);
-    };
-    tr.appendChild(tdDue);
-
-    // Actions cell
-    const tdActions = document.createElement('td');
-    tdActions.classList.add('actions-cell');
-    const actionsWrap = document.createElement('div');
-    actionsWrap.className = 'actions-wrap';
-
-    const toggleBtn = document.createElement('button');
-    toggleBtn.textContent = isDone ? 'Undo' : 'Done';
-    toggleBtn.className = 'btn-small';
-    toggleBtn.onclick = (e) => {
-      e.stopPropagation();
-      if (isDone) markIncomplete(item.id); else markComplete(item.id);
-    };
-    actionsWrap.appendChild(toggleBtn);
-
-    if (item.githubUrl) {
-      const refreshBtn = document.createElement('button');
-      refreshBtn.textContent = 'Refresh';
-      refreshBtn.className = 'btn-small';
-      refreshBtn.id = 'refresh-' + item.id;
-      refreshBtn.onclick = (e) => { e.stopPropagation(); refreshItem(item.id); };
-      actionsWrap.appendChild(refreshBtn);
-    }
-
-    tdActions.appendChild(actionsWrap);
-    tr.appendChild(tdActions);
+    const tr = buildItemRow(item, { hasSubItems, isExpanded });
     tbody.appendChild(tr);
+
+    // Render sub-items if expanded
+    if (isExpanded && subItemCache.has(item.id)) {
+      const subs = subItemCache.get(item.id);
+      for (const sub of subs) {
+        if (!filterSubItem(sub)) continue;
+        const subTr = buildSubItemRow(sub, item.id);
+        tbody.appendChild(subTr);
+      }
+    }
   }
+}
+
+function buildItemRow(item, { hasSubItems, isExpanded }) {
+  const tr = document.createElement('tr');
+  const isDone = !!item.doneDate;
+  if (isDone) tr.classList.add('status-done');
+  if (item.blocked) tr.classList.add('status-blocked');
+  tr.onclick = () => showDetail(item.id);
+
+  // Type cell (first)
+  const tdType = document.createElement('td');
+  tdType.classList.add('type-cell');
+  tdType.innerHTML = `<span class="type-icon" title="${item.type}">${typeLabel(item.type)}</span>`;
+  tr.appendChild(tdType);
+
+  // Description cell — with expand toggle if has sub-items
+  const tdDesc = document.createElement('td');
+  tdDesc.classList.add('desc-cell');
+  const toggle = document.createElement('span');
+  toggle.className = 'expand-toggle';
+  if (hasSubItems) {
+    toggle.textContent = isExpanded ? '\u25BC' : '\u25B6';
+    toggle.onclick = (e) => {
+      e.stopPropagation();
+      toggleExpand(item.id);
+    };
+  }
+  tdDesc.appendChild(toggle);
+  const descSpan = document.createElement('span');
+  descSpan.innerHTML = item.descriptionHtml;
+  descSpan.querySelectorAll('a').forEach(a => {
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.onclick = (e) => e.stopPropagation();
+  });
+  tdDesc.appendChild(descSpan);
+  tr.appendChild(tdDesc);
+
+  // Status cell
+  const tdStatus = document.createElement('td');
+  const sEmoji = statusEmoji(item);
+  tdStatus.textContent = (sEmoji ? sEmoji + ' ' : '') + item.status;
+  if (item.status.toLowerCase().includes('failing')) tdStatus.classList.add('status-failing');
+  if (item.status.toLowerCase().includes('passing')) tdStatus.classList.add('status-passing');
+  tr.appendChild(tdStatus);
+
+  // Priority cell
+  const tdPriority = document.createElement('td');
+  tdPriority.innerHTML = priorityIcon(item.priority) + ' ' + item.priority;
+  tdPriority.classList.add('priority-' + item.priority.toLowerCase());
+  tdPriority.classList.add('editable');
+  tdPriority.onclick = (e) => {
+    e.stopPropagation();
+    showPriorityPicker(tdPriority, item);
+  };
+  tr.appendChild(tdPriority);
+
+  // Due cell
+  const tdDue = document.createElement('td');
+  tdDue.textContent = item.due;
+  tdDue.classList.add('editable');
+  tdDue.onclick = (e) => {
+    e.stopPropagation();
+    showDatePicker(tdDue, item);
+  };
+  tr.appendChild(tdDue);
+
+  // Actions cell
+  const tdActions = document.createElement('td');
+  tdActions.classList.add('actions-cell');
+  const actionsWrap = document.createElement('div');
+  actionsWrap.className = 'actions-wrap';
+
+  const toggleBtn = document.createElement('button');
+  toggleBtn.textContent = isDone ? 'Undo' : 'Done';
+  toggleBtn.className = 'btn-small';
+  toggleBtn.onclick = (e) => {
+    e.stopPropagation();
+    if (isDone) markIncomplete(item.id); else markComplete(item.id);
+  };
+  actionsWrap.appendChild(toggleBtn);
+  tdActions.appendChild(actionsWrap);
+  tr.appendChild(tdActions);
+  return tr;
+}
+
+function buildSubItemRow(sub, parentId) {
+  const tr = document.createElement('tr');
+  tr.classList.add('sub-item-row');
+
+  // Type cell (first) — PR icon
+  const tdType = document.createElement('td');
+  tdType.classList.add('type-cell');
+  tdType.innerHTML = `<span class="type-icon" title="PR">${TYPE_EMOJI.PR}</span>`;
+  tr.appendChild(tdType);
+
+  // Description cell — indented, with link to the PR/issue
+  const tdDesc = document.createElement('td');
+  tdDesc.classList.add('sub-item-desc');
+  const link = document.createElement('a');
+  link.href = sub.githubUrl;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.textContent = sub.repo.replace('ethereum-optimism/', '') + '#' + sub.number;
+  link.onclick = (e) => e.stopPropagation();
+  tdDesc.appendChild(link);
+  if (sub.title) {
+    tdDesc.appendChild(document.createTextNode(' ' + sub.title));
+  }
+  tr.appendChild(tdDesc);
+
+  // Status cell
+  const tdStatus = document.createElement('td');
+  const status = sub.currentStatus;
+  tdStatus.textContent = status;
+  if (status.toLowerCase().includes('failing')) tdStatus.classList.add('status-failing');
+  if (status.toLowerCase().includes('passing')) tdStatus.classList.add('status-passing');
+  if (status.toLowerCase().includes('merged')) tdStatus.classList.add('sub-item-merged');
+  tr.appendChild(tdStatus);
+
+  // Priority cell — editable
+  const tdPriority = document.createElement('td');
+  const p = sub.currentPriority || '';
+  if (p) {
+    tdPriority.innerHTML = priorityIcon(p) + ' ' + p;
+    tdPriority.classList.add('priority-' + p.toLowerCase());
+  }
+  tdPriority.classList.add('editable');
+  tdPriority.onclick = (e) => {
+    e.stopPropagation();
+    showSubPriorityPicker(tdPriority, sub, parentId);
+  };
+  tr.appendChild(tdPriority);
+
+  // Due cell — empty
+  const tdDue = document.createElement('td');
+  tr.appendChild(tdDue);
+
+  // Actions cell — empty
+  const tdActions = document.createElement('td');
+  tr.appendChild(tdActions);
+
+  // Click row to open parent detail
+  tr.onclick = () => showDetail(parentId);
+
+  return tr;
+}
+
+function showSubPriorityPicker(cell, sub, parentId) {
+  document.querySelectorAll('.priority-picker').forEach(el => el.remove());
+  const picker = document.createElement('div');
+  picker.className = 'priority-picker';
+  const priorities = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5'];
+  for (const p of priorities) {
+    const btn = document.createElement('button');
+    btn.textContent = p;
+    btn.className = 'btn-small priority-' + p.toLowerCase();
+    if (p === sub.currentPriority) btn.classList.add('current');
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      picker.remove();
+      if (p !== sub.currentPriority) updateSubPriority(parentId, sub.repo, sub.number, p);
+    };
+    picker.appendChild(btn);
+  }
+  cell.style.position = 'relative';
+  cell.appendChild(picker);
+  const close = (e) => {
+    if (!picker.contains(e.target)) {
+      picker.remove();
+      document.removeEventListener('click', close, true);
+    }
+  };
+  setTimeout(() => document.addEventListener('click', close, true), 0);
+}
+
+async function updateSubPriority(parentId, repo, number, priority) {
+  try {
+    const res = await fetch('/api/sub-priority/' + parentId, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo, number, priority }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+  } catch (err) {
+    console.error('Failed to set sub-item priority:', err);
+  }
+}
+
+function toggleExpand(id) {
+  if (expandedItems.has(id)) {
+    expandedItems.delete(id);
+  } else {
+    expandedItems.add(id);
+  }
+  renderTable();
+  syncUrl();
+}
+
+async function prefetchSubItems() {
+  if (detailIds.size === 0) return;
+  const fetches = [...detailIds].map(async (id) => {
+    try {
+      const res = await fetch('/api/sub-items/' + id);
+      if (!res.ok) return;
+      const data = await res.json();
+      const subs = data.subItems || [];
+      if (subs.length > 0) subItemCache.set(id, subs);
+    } catch {}
+  });
+  await Promise.all(fetches);
+  renderTable();
 }
 
 // Sorting
@@ -350,6 +516,21 @@ function filterItems(items) {
   });
 }
 
+function isSubItemDone(sub) {
+  const s = sub.currentStatus.toLowerCase();
+  return s.includes('merged') || s.includes('closed');
+}
+
+function filterSubItem(sub) {
+  if (filterStatus === 'active' && isSubItemDone(sub)) return false;
+  if (filterStatus === 'done' && !isSubItemDone(sub)) return false;
+  if (searchQuery) {
+    const searchable = [sub.repo, '#' + sub.number, sub.title, sub.currentStatus, sub.currentPriority].join(' ').toLowerCase();
+    if (!searchable.includes(searchQuery.trim().toLowerCase())) return false;
+  }
+  return true;
+}
+
 // Detail panel
 async function showDetail(id) {
   const panel = document.getElementById('detail-panel');
@@ -361,7 +542,10 @@ async function showDetail(id) {
   currentDetailHtml = null;
   document.getElementById('detail-edit').classList.add('hidden');
 
-  title.textContent = id;
+  const item = state.items.find(i => i.id === id);
+  const descText = item ? item.description.replace(/^\[.*?\]\(.*?\)\s*/, '') : id;
+  title.textContent = descText || id;
+  document.getElementById('detail-id').textContent = id;
   content.innerHTML = '<p>Loading...</p>';
   panel.classList.add('visible');
   syncUrl();
@@ -373,27 +557,12 @@ async function showDetail(id) {
       currentDetailRaw = detail.content;
       currentDetailHtml = detail.contentHtml;
       content.innerHTML = detail.contentHtml;
-      document.getElementById('detail-edit').classList.remove('hidden');
     } else {
-      // No detail file — show item info
-      const item = state.items.find(i => i.id === id);
-      if (item) {
-        const statusEl = document.createElement('p');
-        statusEl.innerHTML = '<strong>Status:</strong> ';
-        statusEl.appendChild(document.createTextNode(item.status));
-        const priorityEl = document.createElement('p');
-        priorityEl.innerHTML = '<strong>Priority:</strong> ';
-        priorityEl.appendChild(document.createTextNode(item.priority));
-        content.innerHTML = '';
-        const descEl = document.createElement('p');
-        descEl.innerHTML = item.descriptionHtml;
-        content.appendChild(descEl);
-        content.appendChild(statusEl);
-        content.appendChild(priorityEl);
-      } else {
-        content.innerHTML = '<p>No details available.</p>';
-      }
+      currentDetailRaw = '';
+      currentDetailHtml = '';
+      content.innerHTML = '';
     }
+    document.getElementById('detail-edit').classList.remove('hidden');
   } catch (err) {
     content.innerHTML = '<p>Error loading details.</p>';
   }
@@ -403,7 +572,7 @@ function refreshOpenDetail() {
   const panel = document.getElementById('detail-panel');
   if (!panel.classList.contains('visible')) return;
   if (detailEditMode) return; // Don't refresh while editing
-  const id = document.getElementById('detail-title').textContent;
+  const id = document.getElementById('detail-id').textContent;
   if (id) showDetail(id);
 }
 
@@ -442,60 +611,77 @@ function enterDetailEditMode() {
   const content = document.getElementById('detail-content');
   const segments = splitDetailSegments(currentDetailRaw);
 
-  // Extract rendered <table> elements from the stored HTML in document order
-  const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = currentDetailHtml;
-  const renderedTables = [...tempDiv.querySelectorAll('table')];
-  let tableIdx = 0;
+  // Find the index after the last table segment — only content after it is editable
+  let lastTableIdx = -1;
+  for (let i = segments.length - 1; i >= 0; i--) {
+    if (segments[i].type === 'table') { lastTableIdx = i; break; }
+  }
 
-  content.innerHTML = '';
-
-  for (const seg of segments) {
-    if (seg.type === 'table') {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'detail-locked-section';
-      const table = renderedTables[tableIdx++];
-      if (table) wrapper.appendChild(table);
-      content.appendChild(wrapper);
+  // Everything up to and including the last table stays as rendered HTML
+  const lockedLines = [];
+  const editableLines = [];
+  for (let i = 0; i < segments.length; i++) {
+    if (i <= lastTableIdx) {
+      lockedLines.push(...segments[i].lines);
     } else {
-      const textarea = document.createElement('textarea');
-      textarea.className = 'detail-edit-textarea';
-      textarea.value = seg.lines.join('\n');
-      content.appendChild(textarea);
+      editableLines.push(...segments[i].lines);
     }
   }
+
+  // Remove everything after the last table from the rendered content, replace with textarea
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = currentDetailHtml;
+  const tables = tempDiv.querySelectorAll('table');
+  if (tables.length > 0) {
+    const lastTable = tables[tables.length - 1];
+    let node = lastTable.nextSibling;
+    while (node) {
+      const next = node.nextSibling;
+      node.remove();
+      node = next;
+    }
+  }
+  content.innerHTML = tempDiv.innerHTML;
+
+  const textarea = document.createElement('textarea');
+  textarea.className = 'detail-edit-textarea';
+  textarea.value = editableLines.join('\n');
+  content.appendChild(textarea);
 }
 
-function exitDetailEditMode(reload) {
+function exitDetailEditMode(restoreContent) {
   detailEditMode = false;
   document.getElementById('detail-save').classList.add('hidden');
   document.getElementById('detail-cancel').classList.add('hidden');
   if (currentDetailRaw !== null) {
     document.getElementById('detail-edit').classList.remove('hidden');
   }
-  if (reload) {
-    const id = document.getElementById('detail-title').textContent;
-    if (id) showDetail(id);
+  if (restoreContent && currentDetailHtml) {
+    document.getElementById('detail-content').innerHTML = currentDetailHtml;
   }
 }
 
 async function saveDetailContent() {
-  const id = document.getElementById('detail-title').textContent;
+  const id = document.getElementById('detail-id').textContent;
   if (!id || !currentDetailRaw) return;
 
   const content = document.getElementById('detail-content');
   const segments = splitDetailSegments(currentDetailRaw);
-  const textareas = [...content.querySelectorAll('textarea.detail-edit-textarea')];
-  let taIdx = 0;
+  const textarea = content.querySelector('textarea.detail-edit-textarea');
+
+  // Reconstruct: everything up to and including the last table stays unchanged,
+  // then replace the rest with the textarea content
+  let lastTableIdx = -1;
+  for (let i = segments.length - 1; i >= 0; i--) {
+    if (segments[i].type === 'table') { lastTableIdx = i; break; }
+  }
 
   const allLines = [];
-  for (const seg of segments) {
-    if (seg.type === 'table') {
-      allLines.push(...seg.lines);
-    } else {
-      const ta = textareas[taIdx++];
-      allLines.push(...(ta ? ta.value.split('\n') : seg.lines));
-    }
+  for (let i = 0; i <= lastTableIdx; i++) {
+    allLines.push(...segments[i].lines);
+  }
+  if (textarea) {
+    allLines.push(...textarea.value.split('\n'));
   }
   const newMarkdown = allLines.join('\n');
 
@@ -514,7 +700,8 @@ async function saveDetailContent() {
       throw new Error(err.error || 'Save failed');
     }
     currentDetailRaw = newMarkdown;
-    exitDetailEditMode(true);
+    exitDetailEditMode(false);
+    showDetail(id);
   } catch (err) {
     console.error('Failed to save detail:', err);
     saveBtn.disabled = false;
@@ -541,18 +728,6 @@ async function markIncomplete(id) {
   }
 }
 
-async function refreshItem(id) {
-  const btn = document.getElementById('refresh-' + id);
-  if (btn) { btn.classList.add('loading'); btn.disabled = true; }
-  try {
-    const res = await fetch('/api/refresh/' + id, { method: 'POST' });
-    if (!res.ok) throw new Error(await res.text());
-  } catch (err) {
-    console.error('Failed to refresh:', err);
-  } finally {
-    if (btn) { btn.classList.remove('loading'); btn.disabled = false; }
-  }
-}
 
 function handleUpdateProgress(data) {
   const progress = document.getElementById('update-progress');
@@ -618,26 +793,18 @@ function showUpdateDialog(results, discovered, errors) {
     ul.className = 'changes-list';
     for (const r of results) {
       const li = document.createElement('li');
-      const idSpan = document.createElement('span');
-      idSpan.className = 'change-id';
-      idSpan.textContent = r.id;
-      li.appendChild(idSpan);
-
-      if (r.githubUrl && r.repo && r.prNumber) {
+      if (r.githubUrl) {
         const link = document.createElement('a');
         link.href = r.githubUrl;
         link.target = '_blank';
         link.className = 'change-ref';
-        link.textContent = r.repo.replace('ethereum-optimism/', '') + '#' + r.prNumber;
+        link.textContent = itemDisplayName(r);
         li.appendChild(link);
-        // Extract title from description (strip the link prefix if present)
-        const title = r.description.replace(/^\[.*?\]\(.*?\)\s*/, '');
-        if (title) {
-          const titleSpan = document.createElement('span');
-          titleSpan.className = 'change-title';
-          titleSpan.textContent = title;
-          li.appendChild(titleSpan);
-        }
+      } else {
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'change-id';
+        nameSpan.textContent = itemDisplayName(r);
+        li.appendChild(nameSpan);
       }
 
       if (r.oldStatus !== r.newStatus) {
@@ -689,10 +856,10 @@ function showUpdateDialog(results, discovered, errors) {
     ul.className = 'changes-list';
     for (const e of errors) {
       const li = document.createElement('li');
-      const idSpan = document.createElement('span');
-      idSpan.className = 'change-id';
-      idSpan.textContent = e.id;
-      li.appendChild(idSpan);
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'change-id';
+      nameSpan.textContent = itemDisplayName(e);
+      li.appendChild(nameSpan);
       const errSpan = document.createElement('span');
       errSpan.style.color = 'var(--color-danger, #e53e3e)';
       errSpan.textContent = e.error;
@@ -963,16 +1130,6 @@ async function fetchLastUpdateTime() {
 }
 
 // Auto-added items notice
-function showAutoAddedNotice(data) {
-  const n = data.count || 0;
-  if (n === 0) return;
-  const badge = document.getElementById('pending-badge');
-  const count = document.getElementById('pending-count');
-  count.textContent = `+${n} added`;
-  badge.classList.remove('hidden');
-  badge.title = `${n} new item${n === 1 ? '' : 's'} auto-added`;
-  setTimeout(() => badge.classList.add('hidden'), 8000);
-}
 
 
 // Update log
@@ -1065,8 +1222,7 @@ function renderLogEntry(entry) {
       ul.className = 'log-changes';
       for (const r of entry.results) {
         const li = document.createElement('li');
-        const title = r.description ? r.description.replace(/^\[.*?\]\(.*?\)\s*/, '') : '';
-        li.textContent = r.id + (title ? ' ' + title : '') + ': ' + r.oldStatus + ' \u2192 ' + r.newStatus;
+        li.textContent = itemDisplayName(r) + ': ' + r.oldStatus + ' \u2192 ' + r.newStatus;
         if (r.oldPriority !== r.newPriority) li.textContent += ' (' + r.oldPriority + ' \u2192 ' + r.newPriority + ')';
         if (r.doneDateSet) li.textContent += ' [Done]';
         ul.appendChild(li);
@@ -1083,8 +1239,7 @@ function renderLogEntry(entry) {
       ul.className = 'log-errors';
       for (const e of entry.errors) {
         const li = document.createElement('li');
-        const errTitle = e.description ? e.description.replace(/^\[.*?\]\(.*?\)\s*/, '') : '';
-        li.textContent = e.id + (errTitle ? ' ' + errTitle : '') + ': ' + e.error;
+        li.textContent = itemDisplayName(e) + ': ' + e.error;
         ul.appendChild(li);
       }
       details.appendChild(ul);

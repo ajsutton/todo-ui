@@ -14,9 +14,6 @@
       <span id="connection-status" class="status-indicator"></span>
     </div>
     <div class="actions">
-      <button id="pending-badge" class="btn pending-badge hidden" title="New items found by auto-update">
-        <span id="pending-count">0</span> pending
-      </button>
       <span id="last-update" class="last-update"></span>
       <button id="show-standup" class="btn-small">Standup</button>
       <a id="show-log" href="#" title="Update log">View Log</a>
@@ -51,10 +48,9 @@
   <table id="todo-table">
     <thead>
       <tr>
-        <th data-sort="id">ID</th>
+        <th data-sort="type">Type</th>
         <th data-sort="description">Description</th>
         <th data-sort="status">Status</th>
-        <th data-sort="type">Type</th>
         <th data-sort="priority">Priority</th>
         <th data-sort="due">Due</th>
         <th>Actions</th>
@@ -65,7 +61,10 @@
 
   <div id="detail-panel" class="detail-panel">
     <div class="detail-header">
-      <h2 id="detail-title"></h2>
+      <div>
+        <h2 id="detail-title"></h2>
+        <span id="detail-id" class="detail-id"></span>
+      </div>
       <div class="detail-header-actions">
         <button id="detail-edit" class="btn-small hidden">Edit</button>
         <button id="detail-save" class="btn-small hidden">Save</button>
@@ -99,10 +98,6 @@
     <div class="claude-input-row">
       <input type="text" id="claude-prompt" placeholder="Ask Claude..." />
       <button id="claude-send" class="btn">Send</button>
-    </div>
-    <div class="quick-actions">
-      <button class="quick-action btn-small" data-prompt="update the status of all open TODOs">Update All</button>
-      <button class="quick-action btn-small" data-prompt="update the status of all review requests">Update Reviews</button>
     </div>
     <div id="claude-spinner" class="claude-spinner hidden"><span class="spinner"></span> Thinking...</div>
     <pre id="claude-output" class="hidden"></pre>

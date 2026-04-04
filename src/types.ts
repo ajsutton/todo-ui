@@ -43,9 +43,20 @@ export interface DiscoveredItem {
   prNumber: number;
   title: string;
   url: string;
-  type: "PR" | "Review";
+  type: "PR" | "Review" | "Issue";
   suggestedPriority: string;
   author: string;
+  linkedPrs?: LinkedPr[];
+}
+
+export interface LinkedPr {
+  repo: string;
+  number: number;
+  title: string;
+  url: string;
+  status: string;
+  priority: string;
+  isDraft: boolean;
 }
 
 export interface UpdateLogEntry {

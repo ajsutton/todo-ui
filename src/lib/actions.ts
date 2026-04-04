@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, renameSync, existsSync, unlinkSync, readdirSync } from "node:fs";
 import path from "node:path";
-import type { TodoItem, GhPrStatus, ClaudeChunk, DiscoveredItem } from "../types.ts";
+import type { TodoItem, GhPrStatus, ClaudeChunk, DiscoveredItem, LinkedPr } from "../types.ts";
 
 const SEARCH_ORG = "ethereum-optimism";
 
@@ -142,6 +142,69 @@ export function saveDetailMarkdown(todoDir: string, id: string, markdown: string
   const number = id.replace("TODO-", "");
   const filePath = path.join(todoDir, `TODO-${number}.md`);
   atomicWrite(filePath, markdown);
+}
+
+export function setSubItemPriority(
+  todoDir: string,
+  parentId: string,
+  repo: string,
+  number: number,
+  priority: string,
+): void {
+  if (!/^P[0-5]$/.test(priority)) throw new Error(`Invalid priority "${priority}"`);
+  const detailPath = path.join(todoDir, `${parentId}.md`);
+  if (!existsSync(detailPath)) throw new Error(`Detail file not found for ${parentId}`);
+
+  let content = readFileSync(detailPath, "utf-8");
+  const refs = parseDetailPrRefs(content);
+  const ref = refs.find((r) => r.repo === repo && r.number === number);
+  if (!ref) throw new Error(`Sub-item ${repo}#${number} not found in ${parentId}`);
+
+  const lines = content.split("\n");
+
+  if (ref.priorityCellIndex !== -1) {
+    // Priority column exists — update it
+    const line = lines[ref.lineIndex]!;
+    const cells = line.split("|");
+    cells[ref.priorityCellIndex] = ` ${priority} `;
+    lines[ref.lineIndex] = cells.join("|");
+  } else {
+    // No Priority column — add one to the table header, separator, and all data rows
+    // Find the table header for this ref by scanning backwards
+    let headerIdx = -1;
+    let sepIdx = -1;
+    for (let i = ref.lineIndex - 1; i >= 0; i--) {
+      const line = lines[i]!.trim();
+      if (!line.startsWith("|")) break;
+      if (line.split("|").some((c) => /^-+$/.test(c.trim()))) {
+        sepIdx = i;
+        continue;
+      }
+      if (line.split("|").some((c) => /^status$/i.test(c.trim()))) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx === -1 || sepIdx === -1) throw new Error("Could not find table header");
+
+    // Append Priority column to header
+    lines[headerIdx] = lines[headerIdx]!.replace(/\|\s*$/, "| Priority |");
+    // Append to separator
+    lines[sepIdx] = lines[sepIdx]!.replace(/\|\s*$/, "|----------|");
+
+    // Add priority cell to all data rows in this table
+    for (let i = sepIdx + 1; i < lines.length; i++) {
+      const line = lines[i]!.trim();
+      if (!line.startsWith("|")) break;
+      const val = (refs.find((r) => r.lineIndex === i)?.repo === repo &&
+                   refs.find((r) => r.lineIndex === i)?.number === number)
+        ? priority : "";
+      lines[i] = lines[i]!.replace(/\|\s*$/, `| ${val} |`);
+    }
+  }
+
+  content = lines.join("\n");
+  atomicWrite(detailPath, content);
 }
 
 function parseGhPrJson(json: string): GhPrStatus {
@@ -718,6 +781,79 @@ export async function updateAll(
     }
   }
 
+  // Recompute issue priorities from sub-items
+  const issueItems = items.filter((i) => (i.type === "Issue" || i.type === "Workstream") && !i.doneDate);
+  for (const issue of issueItems) {
+    const detailPath = path.join(todoDir, `${issue.id}.md`);
+    if (!existsSync(detailPath)) continue;
+    let content = readFileSync(detailPath, "utf-8");
+    let refs = parseDetailPrRefs(content);
+
+    // Backfill Priority column if missing
+    if (refs.length > 0 && refs[0]!.priorityCellIndex === -1) {
+      const lines = content.split("\n");
+      let patched = false;
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]!.trim();
+        if (!line.startsWith("|")) continue;
+        const cells = line.split("|").map((c) => c.trim());
+        if (cells.some((c) => /^status$/i.test(c))) {
+          // Header row — append Priority column
+          lines[i] = lines[i]!.replace(/\|\s*$/, "| Priority |");
+          // Next line should be separator
+          if (i + 1 < lines.length && lines[i + 1]!.includes("---")) {
+            lines[i + 1] = lines[i + 1]!.replace(/\|\s*$/, "|----------|");
+          }
+          patched = true;
+          continue;
+        }
+        if (!patched) continue;
+        if (cells.some((c) => /^-+$/.test(c))) continue;
+        if (!line.startsWith("|")) break;
+        // Data row — assign default priority based on status
+        const statusCol = refs.find((r) => r.lineIndex === i);
+        let defaultP = "";
+        if (statusCol) {
+          const s = statusCol.currentStatus.toLowerCase();
+          if (s.includes("merged") || s.includes("closed")) defaultP = "";
+          else if (s.includes("draft")) defaultP = "P3";
+          else defaultP = "P2";
+        }
+        lines[i] = lines[i]!.replace(/\|\s*$/, `| ${defaultP} |`);
+      }
+      if (patched) {
+        content = lines.join("\n");
+        atomicWrite(detailPath, content);
+        refs = parseDetailPrRefs(content);
+      }
+    }
+    // P4 if no sub-items, otherwise highest sub-item priority with P3 floor
+    let newPriorityNum = refs.length > 0 ? 3 : 4;
+    for (const ref of refs) {
+      if (!ref.currentPriority) continue;
+      const pNum = parseInt(ref.currentPriority.replace("P", ""), 10);
+      if (!Number.isNaN(pNum) && pNum < newPriorityNum) newPriorityNum = pNum;
+    }
+    const newPriority = `P${newPriorityNum}`;
+    if (newPriority !== issue.priority) {
+      let fileContent = readFileSync(filePath, "utf-8");
+      fileContent = replaceCells(fileContent, issue.id, new Map([[CELL_PRIORITY, newPriority]]));
+      atomicWrite(filePath, fileContent);
+      results.push({
+        id: issue.id,
+        description: issue.description,
+        githubUrl: issue.githubUrl,
+        repo: issue.repo,
+        prNumber: issue.prNumber,
+        oldStatus: issue.status,
+        newStatus: issue.status,
+        oldPriority: issue.priority,
+        newPriority,
+        doneDateSet: false,
+      });
+    }
+  }
+
   // Discover new items
   onProgress?.(total, total, "Scanning for new items");
   const discovered = ghUser ? await discoverNewItems(todoDir, items, ghUser, staleIds) : [];
@@ -866,15 +1002,19 @@ function computeCiStatusFromBatch(checks: Array<Record<string, unknown>>): strin
   return "PENDING";
 }
 
-interface DetailPrRef {
+export interface DetailPrRef {
   repo: string;
   number: number;
   lineIndex: number;
   statusCellIndex: number;
+  priorityCellIndex: number;
   currentStatus: string;
+  currentPriority: string;
+  title: string;
+  githubUrl: string;
 }
 
-function parseDetailPrRefs(content: string): DetailPrRef[] {
+export function parseDetailPrRefs(content: string): DetailPrRef[] {
   const lines = content.split("\n");
   const refs: DetailPrRef[] = [];
 
@@ -882,6 +1022,8 @@ function parseDetailPrRefs(content: string): DetailPrRef[] {
   // Supports multiple tables — each header row resets column indices
   let statusColIdx = -1;
   let prColIdx = -1;
+  let titleColIdx = -1;
+  let priorityColIdx = -1;
   let inTable = false;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -890,16 +1032,20 @@ function parseDetailPrRefs(content: string): DetailPrRef[] {
         inTable = false;
         statusColIdx = -1;
         prColIdx = -1;
+        titleColIdx = -1;
+        priorityColIdx = -1;
       }
       continue;
     }
 
     const cells = line.split("|").map((c) => c.trim());
 
-    // Detect header row to find Status and PR column indices
+    // Detect header row to find Status, PR, and Title column indices
     if (cells.some((c) => /^status$/i.test(c))) {
       statusColIdx = cells.findIndex((c) => /^status$/i.test(c));
       prColIdx = cells.findIndex((c) => /^pr$/i.test(c));
+      titleColIdx = cells.findIndex((c) => /^title$/i.test(c));
+      priorityColIdx = cells.findIndex((c) => /^priority$/i.test(c));
       inTable = true;
       continue;
     }
@@ -911,16 +1057,44 @@ function parseDetailPrRefs(content: string): DetailPrRef[] {
 
     // Extract PR reference from the PR column if identified, otherwise from the whole line
     const searchText = prColIdx !== -1 ? (cells[prColIdx] ?? "") : line;
-    const urlMatch = searchText.match(/github\.com\/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)\/pull\/(\d+)/);
+    const urlMatch = searchText.match(/github\.com\/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)\/(pull|issues)\/(\d+)/);
     const shortMatch = searchText.match(/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)#(\d+)/);
-    const match = urlMatch ?? shortMatch;
-    if (!match) continue;
 
-    const repo = match[1]!;
-    const number = parseInt(match[2]!, 10);
+    let repo: string;
+    let number: number;
+    let githubUrl: string;
+    if (urlMatch) {
+      repo = urlMatch[1]!;
+      number = parseInt(urlMatch[3]!, 10);
+      const kind = urlMatch[2] === "issues" ? "issues" : "pull";
+      githubUrl = `https://github.com/${repo}/${kind}/${number}`;
+    } else if (shortMatch) {
+      repo = shortMatch[1]!;
+      number = parseInt(shortMatch[2]!, 10);
+      githubUrl = `https://github.com/${repo}/pull/${number}`;
+    } else {
+      continue;
+    }
+
     const currentStatus = cells[statusColIdx] ?? "";
 
-    refs.push({ repo, number, lineIndex: i, statusCellIndex: statusColIdx, currentStatus });
+    // Extract title from the Title column, or from the link text in the PR column
+    let title = "";
+    if (titleColIdx !== -1) {
+      title = (cells[titleColIdx] ?? "").replace(/^\[.*?\]\(.*?\)\s*/, "").trim();
+    }
+    if (!title) {
+      // Try to get link text: [text](url)
+      const linkTextMatch = searchText.match(/\[([^\]]+)\]/);
+      if (linkTextMatch) {
+        // Strip the repo#number prefix from link text if present
+        title = linkTextMatch[1]!.replace(/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+#\d+\s*/, "").trim();
+      }
+    }
+
+    const currentPriority = priorityColIdx !== -1 ? (cells[priorityColIdx] ?? "").trim() : "";
+
+    refs.push({ repo, number, lineIndex: i, statusCellIndex: statusColIdx, priorityCellIndex: priorityColIdx, currentStatus, currentPriority, title, githubUrl });
   }
 
   return refs;
@@ -1033,6 +1207,57 @@ interface GhSearchItem {
   user: { login: string };
 }
 
+async function findLinkedPrs(repo: string, issueNumber: number): Promise<LinkedPr[]> {
+  // Use the timeline API to find PRs that reference this issue
+  const proc = Bun.spawn(["gh", "api", `repos/${repo}/issues/${issueNumber}/timeline?per_page=100`]);
+  const output = await new Response(proc.stdout).text();
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) return [];
+
+  let events: Array<Record<string, unknown>>;
+  try {
+    events = JSON.parse(output) as Array<Record<string, unknown>>;
+  } catch { return []; }
+
+  const linkedPrs: LinkedPr[] = [];
+  const seen = new Set<string>();
+
+  for (const event of events) {
+    if (event["event"] !== "cross-referenced") continue;
+    const source = event["source"] as Record<string, unknown> | undefined;
+    if (!source) continue;
+    const issue = source["issue"] as Record<string, unknown> | undefined;
+    if (!issue) continue;
+    // Only include pull requests (they have pull_request key)
+    if (!issue["pull_request"]) continue;
+    // Only include open PRs
+    if (issue["state"] !== "open") continue;
+
+    const prUrl = issue["html_url"] as string;
+    const prNumber = issue["number"] as number;
+    const prRepo = (issue["repository_url"] as string).replace("https://api.github.com/repos/", "");
+    const key = `${prRepo}#${prNumber}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const isDraft = !!(issue["draft"] as boolean);
+    const prPriority = isDraft ? "P3" : "P2";
+    const status = isDraft ? "Draft" : "Open";
+
+    linkedPrs.push({
+      repo: prRepo,
+      number: prNumber,
+      title: issue["title"] as string,
+      url: prUrl,
+      status,
+      priority: prPriority,
+      isDraft,
+    });
+  }
+
+  return linkedPrs;
+}
+
 async function ghSearchIssues(query: string): Promise<GhSearchItem[]> {
   const proc = Bun.spawn(["gh", "api", `search/issues?q=${query}&per_page=50`]);
   const output = await new Response(proc.stdout).text();
@@ -1101,10 +1326,11 @@ async function discoverNewItems(
   const tracked = collectTrackedKeys(todoDir, items, staleIds);
   const discovered: DiscoveredItem[] = [];
 
-  // Run both searches in parallel
-  const [myPrs, reviewRequests] = await Promise.all([
+  // Run all searches in parallel
+  const [myPrs, reviewRequests, assignedIssues] = await Promise.all([
     ghSearchIssues(`author:${ghUser}+is:open+is:pr+org:${SEARCH_ORG}`),
     ghSearchIssues(`user-review-requested:${ghUser}+is:open+is:pr+draft:false+org:${SEARCH_ORG}`),
+    ghSearchIssues(`assignee:${ghUser}+is:open+is:issue+org:${SEARCH_ORG}`),
   ]);
 
   // Track review request keys to avoid duplicates with my PRs
@@ -1137,6 +1363,36 @@ async function discoverNewItems(
       type: "PR",
       suggestedPriority: pr.draft ? "P3" : "P2",
       author: pr.user.login,
+    });
+  }
+
+  // Discover assigned issues and find linked PRs for each
+  const issueKeys = new Set<string>();
+  for (const issue of assignedIssues) {
+    const repo = issue.repository_url.replace("https://api.github.com/repos/", "");
+    const key = `${repo}#${issue.number}`;
+    issueKeys.add(key);
+    if (tracked.has(key)) continue;
+
+    // Find open PRs that reference this issue
+    const linkedPrs = await findLinkedPrs(repo, issue.number);
+
+    // P4 if no linked PRs (not started), P3+ if there are (work in progress)
+    let priority = linkedPrs.length > 0 ? 3 : 4;
+    for (const lp of linkedPrs) {
+      const pNum = parseInt(lp.priority.replace("P", ""), 10);
+      if (!Number.isNaN(pNum) && pNum < priority) priority = pNum;
+    }
+
+    discovered.push({
+      repo,
+      prNumber: issue.number,
+      title: issue.title,
+      url: issue.html_url,
+      type: "Issue",
+      suggestedPriority: `P${priority}`,
+      author: issue.user.login,
+      linkedPrs: linkedPrs.length > 0 ? linkedPrs : undefined,
     });
   }
 
@@ -1184,8 +1440,9 @@ export function addDiscoveredItems(todoDir: string, newItems: DiscoveredItem[]):
     }
   }
 
-  // Build new rows
+  // Build new rows and collect detail files to create
   const newRows: string[] = [];
+  const detailFiles: Array<{ id: string; item: DiscoveredItem }> = [];
   for (const item of newItems) {
     maxId++;
     const id = `TODO-${maxId}`;
@@ -1196,17 +1453,58 @@ export function addDiscoveredItems(todoDir: string, newItems: DiscoveredItem[]):
     const desc = `[${shortRepo}#${item.prNumber}](${item.url}) ${item.title}${item.type === "Review" ? ` (${item.author})` : ""}`;
     const status = item.type === "Review" ? "Pending" : "Open";
     newRows.push(`| ${id} | ${desc} | ${item.type} | ${status} | ${item.suggestedPriority} | | |`);
+
+    if (item.linkedPrs && item.linkedPrs.length > 0) {
+      detailFiles.push({ id, item });
+    }
   }
 
   // Insert after the last row
   lines.splice(lastRowIdx + 1, 0, ...newRows);
   atomicWrite(filePath, lines.join("\n"));
+
+  // Create detail files for issues with linked PRs
+  for (const { id, item } of detailFiles) {
+    const shortRepo = item.repo.startsWith(`${SEARCH_ORG}/`)
+      ? item.repo.slice(SEARCH_ORG.length + 1)
+      : item.repo;
+    const detailLines = [
+      `# ${item.title}`,
+      ``,
+      `## Issue`,
+      `[${shortRepo}#${item.prNumber}](${item.url})`,
+      ``,
+      `## PRs`,
+      `| PR | Title | Status | Priority |`,
+      `|----|-------|--------|----------|`,
+    ];
+    for (const lp of item.linkedPrs!) {
+      const lpShortRepo = lp.repo.startsWith(`${SEARCH_ORG}/`)
+        ? lp.repo.slice(SEARCH_ORG.length + 1)
+        : lp.repo;
+      detailLines.push(`| [${lpShortRepo}#${lp.number}](${lp.url}) | ${lp.title} | ${lp.status} | ${lp.priority} |`);
+    }
+    detailLines.push(``);
+    atomicWrite(path.join(todoDir, `${id}.md`), detailLines.join("\n"));
+  }
 }
 
 export async function* runClaudePrompt(
-  cwd: string,
+  todoDir: string,
   prompt: string,
 ): AsyncGenerator<ClaudeChunk, void, void> {
+  const systemPrompt = [
+    `You are managing a TODO list stored in markdown files.`,
+    `The TODO data directory is: ${todoDir}`,
+    `- TODO.md contains the main table of items (ID, Description, Type, Status, Priority, Due, Done).`,
+    `- Detail files (TODO-N.md) contain additional context, linked PRs/issues in markdown tables.`,
+    `- When editing these files, preserve the existing markdown table format exactly.`,
+  ].join("\n");
+
+  // Add the todo-ui project dir so the /todo skill is available
+  // import.meta.dir = src/lib/, so go up two levels to project root
+  const todoUiRoot = path.resolve(import.meta.dir, "..", "..");
+
   const proc = Bun.spawn(
     [
       "claude", "-p", prompt,
@@ -1214,9 +1512,11 @@ export async function* runClaudePrompt(
       "--verbose",
       "--include-partial-messages",
       "--permission-mode", "bypassPermissions",
+      "--append-system-prompt", systemPrompt,
+      "--add-dir", todoUiRoot,
     ],
     {
-      cwd,
+      cwd: todoDir,
       stdout: "pipe",
       stderr: "ignore",
     },

@@ -203,62 +203,70 @@ select:focus {
 /* Stats bar */
 .stats-bar {
   display: flex;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
   padding: 12px 20px;
-  overflow-x: auto;
 }
 
-.stat-card {
-  flex: 1;
-  min-width: 120px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 16px;
+.stats-row {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.stats-row-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--fg-secondary);
+  min-width: 80px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.seg-bar {
+  display: flex;
+  flex: 1;
+  height: 28px;
+  border-radius: 6px;
+  overflow: hidden;
   gap: 2px;
 }
 
-.stat-value {
-  font-size: 1.5rem;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.stat-label {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--fg-secondary);
-  font-weight: 500;
-}
-
-.stat-sub {
-  font-size: 0.7rem;
-  color: var(--muted);
-  margin-top: 2px;
-}
-
-.stat-value.stat-p0 { color: var(--p0); }
-.stat-value.stat-p1 { color: var(--p1); }
-.stat-value.stat-blocked { color: var(--p0); }
-.stat-value.stat-overdue { color: var(--status-fail); }
-.stat-value.stat-done { color: var(--status-pass); }
-.stat-value.stat-active { color: var(--accent); }
-
-.stat-bar-track {
-  height: 4px;
-  background: var(--border);
-  border-radius: 2px;
-  margin-top: 6px;
+.seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
   overflow: hidden;
 }
 
-.stat-bar-fill {
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.3s ease;
+.seg-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--bg);
+  white-space: nowrap;
+  padding: 0 8px;
+}
+
+.stats-alerts {
+  display: flex;
+  gap: 16px;
+  padding-left: 92px;
+  flex-wrap: wrap;
+}
+
+.stat-alert {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.stat-alert.stat-blocked { color: var(--p0); }
+.stat-alert.stat-overdue { color: var(--status-fail); }
+.stat-alert.stat-done { color: var(--status-pass); }
+
+.stat-alert-muted {
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
 /* Table */
@@ -519,7 +527,7 @@ tr:hover td {
 .detail-edit-textarea {
   display: block;
   width: 100%;
-  min-height: 80px;
+  min-height: 320px;
   padding: 10px;
   border: 1px solid var(--input-border);
   border-radius: 4px;
@@ -548,6 +556,11 @@ tr:hover td {
 .btn-secondary:hover {
   background: var(--bg-secondary);
   color: var(--fg);
+}
+
+.detail-id {
+  font-size: 0.75rem;
+  color: var(--muted);
 }
 
 #detail-content {
@@ -972,6 +985,51 @@ td.editable:hover {
 .dialog-buttons {
   display: flex;
   gap: 8px;
+}
+
+/* Description cell layout */
+.desc-cell {
+  white-space: normal;
+}
+
+/* Expand toggle — always takes up fixed space for alignment */
+.expand-toggle {
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--fg-secondary);
+  user-select: none;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.expand-toggle:not(:empty) {
+  cursor: pointer;
+}
+
+.expand-toggle:not(:empty):hover {
+  color: var(--accent);
+}
+
+/* Sub-item rows */
+.sub-item-row td {
+  font-size: 13px;
+  color: var(--fg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.sub-item-row:hover td {
+  background: var(--table-hover);
+}
+
+.sub-item-desc {
+  padding-left: 32px !important;
+}
+
+.sub-item-merged {
+  opacity: 0.5;
+  text-decoration: line-through;
 }
 
 /* Hidden utility */
