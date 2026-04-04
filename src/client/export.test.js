@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { exportAsMarkdown } from './export.js';
+import { exportAsMarkdown, exportAsCsv } from './export.js';
 import { appState } from './state.js';
 
 function makeItem(overrides) {
@@ -67,5 +67,50 @@ describe('exportAsMarkdown', () => {
     appState.filterStatus = '';
     const md = exportAsMarkdown();
     expect(md).toContain('~~');
+  });
+});
+
+describe('exportAsCsv', () => {
+  beforeEach(() => {
+    appState.items = [];
+    appState.filterType = '';
+    appState.filterStatus = '';
+    appState.searchQuery = '';
+    appState.sortColumn = 'priority';
+    appState.sortDirection = 'asc';
+  });
+
+  it('includes CSV header row', () => {
+    const csv = exportAsCsv();
+    const firstLine = csv.split('\r\n')[0];
+    expect(firstLine).toContain('ID');
+    expect(firstLine).toContain('Description');
+    expect(firstLine).toContain('Priority');
+  });
+
+  it('includes item data', () => {
+    appState.items = [makeItem({ description: 'Fix login', priority: 'P1', status: 'Open' })];
+    const csv = exportAsCsv();
+    expect(csv).toContain('Fix login');
+    expect(csv).toContain('P1');
+  });
+
+  it('escapes commas in cell values', () => {
+    appState.items = [makeItem({ description: 'Fix, the bug' })];
+    const csv = exportAsCsv();
+    expect(csv).toContain('"Fix, the bug"');
+  });
+
+  it('strips markdown link prefix from description', () => {
+    appState.items = [makeItem({ description: '[org/repo#1](https://github.com) My PR' })];
+    const csv = exportAsCsv();
+    expect(csv).toContain('My PR');
+    expect(csv).not.toContain('[org/repo#1]');
+  });
+
+  it('marks blocked items', () => {
+    appState.items = [makeItem({ blocked: true })];
+    const csv = exportAsCsv();
+    expect(csv).toContain('yes');
   });
 });

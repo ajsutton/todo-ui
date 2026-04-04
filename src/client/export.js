@@ -1,4 +1,4 @@
-// Export the currently visible (filtered) items as formatted Markdown.
+// Export the currently visible (filtered) items as formatted Markdown or CSV.
 import { appState } from './state.js';
 import { filterItems, sortItems } from './filters.js';
 
@@ -62,4 +62,56 @@ export async function copyExport() {
     document.body.removeChild(ta);
     return true;
   }
+}
+
+function csvCell(val) {
+  const s = String(val ?? '').replace(/"/g, '""');
+  return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s;
+}
+
+export function exportAsCsv() {
+  const items = sortItems(
+    filterItems([...appState.items], {
+      filterType: appState.filterType,
+      filterStatus: appState.filterStatus,
+      searchQuery: appState.searchQuery,
+    }),
+    appState.sortColumn,
+    appState.sortDirection,
+  );
+
+  const headers = ['ID', 'Description', 'Type', 'Status', 'Priority', 'Due', 'Done Date', 'GitHub URL', 'Blocked'];
+  const rows = [headers.map(csvCell).join(',')];
+
+  for (const item of items) {
+    const desc = item.description.replace(/^\[.*?\]\(.*?\)\s*/, '').trim();
+    rows.push([
+      item.id,
+      desc,
+      item.type,
+      item.status,
+      item.priority,
+      item.due || '',
+      item.doneDate || '',
+      item.githubUrl || '',
+      item.blocked ? 'yes' : '',
+    ].map(csvCell).join(','));
+  }
+
+  return rows.join('\r\n');
+}
+
+export function downloadCsv() {
+  const csv = exportAsCsv();
+  const today = new Date().toISOString().slice(0, 10);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `todos-${today}.csv`;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
