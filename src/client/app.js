@@ -14,6 +14,7 @@ import { requestNotificationPermission, canNotify } from './notifications.js';
 import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar } from './bulk.js';
 import { showSuggestionBanner } from './suggestion.js';
 import { copyExport } from './export.js';
+import { initHoverCards } from './hovercard.js';
 
 function showUpdateDialog(results, discovered, errors) {
   errors = errors || [];
@@ -372,4 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize keyboard shortcuts (includes Escape handler)
   initKeyboard();
+
+  // Initialize hover cards
+  initHoverCards();
 });
