@@ -2117,3 +2117,82 @@ tbody tr {
 .group-emoji   { font-size: 14px; flex-shrink: 0; }
 .group-label   { flex: 1; color: var(--group-color, var(--fg)); }
 .group-count   { font-size: 11px; color: var(--muted); font-weight: 400; }
+
+/* Saved filter presets bar */
+.presets-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.presets-bar.hidden { display: none; }
+
+.presets-label {
+  color: var(--muted);
+  font-size: 11px;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
+.preset-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2px 8px 2px 10px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  font-size: 12px;
+  color: var(--fg);
+}
+.preset-chip:hover {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  border-color: var(--accent);
+}
+
+.preset-name { white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+
+.preset-del {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  line-height: 1;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.preset-del:hover { color: var(--status-fail); background: color-mix(in srgb, var(--status-fail) 12%, transparent); }
+
+/* Preset save dialog (inline, not modal) */
+.preset-dialog {
+  padding: 6px 16px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+  border-bottom: 1px solid var(--border);
+  animation: slide-down 0.15s ease;
+}
+.preset-dialog-inner { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.preset-dialog-label { font-size: 12px; color: var(--fg-secondary); flex-shrink: 0; }
+.preset-dialog-row { display: flex; gap: 6px; align-items: center; }
+.preset-name-input {
+  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--fg);
+  outline: none;
+  width: 180px;
+}
+.preset-name-input:focus { border-color: var(--accent); }
