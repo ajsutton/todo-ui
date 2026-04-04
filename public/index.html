@@ -126,14 +126,15 @@
         <button id="standup-dialog-close" class="btn-icon">&times;</button>
       </div>
       <div class="tab-bar">
-        <button class="tab-btn active" data-tab="report">Report</button>
-        <button class="tab-btn" data-tab="claude">Claude</button>
+        <button class="tab-btn" data-tab="report">Report</button>
+        <button class="tab-btn active" data-tab="claude">Claude</button>
       </div>
-      <div id="standup-tab-report" class="tab-content standup-content"></div>
-      <div id="standup-tab-claude" class="tab-content standup-content hidden">
+      <div id="standup-tab-report" class="tab-content standup-content hidden"></div>
+      <div id="standup-tab-claude" class="tab-content standup-content">
         <div class="standup-claude-actions">
           <button id="standup-claude-generate" class="btn btn-small hidden">Regenerate</button>
           <div id="standup-claude-spinner" class="claude-spinner hidden"><span class="spinner"></span> <span id="standup-claude-spinner-label">Thinking...</span></div>
+          <span id="standup-claude-generated-at" class="standup-generated-at hidden"></span>
         </div>
         <pre id="standup-claude-output" class="standup-claude-output hidden"></pre>
         <div id="standup-claude-rendered" class="standup-claude-rendered hidden"></div>

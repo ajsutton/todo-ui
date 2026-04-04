@@ -1297,6 +1297,12 @@ td.editable:hover {
   margin-bottom: 12px;
 }
 
+.standup-generated-at {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: auto;
+}
+
 .standup-claude-output {
   background: var(--bg-secondary);
   padding: 14px;
