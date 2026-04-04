@@ -3,6 +3,7 @@ import { appState } from './state.js';
 import { statusEmoji } from './icons.js';
 import { computeUrgency } from './urgency.js';
 import { formatDueDate } from './render.js';
+import { getTimeTracked, formatMinutes } from './timer.js';
 
 let hoverTimer = null;
 let activeCard = null;
@@ -38,6 +39,7 @@ function createCard(item, anchorEl) {
     <div class="hc-status">${sEmoji ? sEmoji + ' ' : ''}${escHtml(item.status)}</div>
     ${dueStr ? `<div class="hc-due">Due: <strong>${escHtml(dueStr)}</strong></div>` : ''}
     <div class="hc-score">Urgency: <strong>${score}</strong>/100</div>
+    ${getTimeTracked(item.id) > 0 ? `<div class="hc-time">⏱ ${formatMinutes(getTimeTracked(item.id))} tracked</div>` : ''}
     ${item.id ? `<div class="hc-id">${escHtml(item.id)}</div>` : ''}
   `;
 
