@@ -301,6 +301,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Focus mode
+  const FOCUS_KEY = 'todo-focus-mode';
+  if (localStorage.getItem(FOCUS_KEY) === '1') document.body.classList.add('focus-mode');
+  document.getElementById('focus-mode-btn')?.addEventListener('click', () => {
+    const isNow = document.body.classList.toggle('focus-mode');
+    localStorage.setItem(FOCUS_KEY, isNow ? '1' : '0');
+  });
+
   // Row density toggle
   const DENSITY_KEY = 'todo-density';
   const savedDensity = localStorage.getItem(DENSITY_KEY) || 'normal';
