@@ -21,6 +21,7 @@ export function updateSessionStats(items) {
       const today = new Date().toISOString().slice(0, 10);
       recordCompletion(today);
       renderStreakBadge();
+      import('./sounds.js').then(({ playSound }) => playSound('done'));
     }
   }
   // Update done set

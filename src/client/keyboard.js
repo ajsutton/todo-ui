@@ -75,9 +75,11 @@ function doneSelected() {
   import('./actions.js').then(({ markComplete, markIncomplete }) => {
     if (item.doneDate) {
       markIncomplete(id);
+      import('./sounds.js').then(({ playSound }) => playSound('undo'));
     } else {
       markComplete(id).then(() => {
         import('./confetti.js').then(({ triggerConfetti }) => triggerConfetti(item.priority));
+        import('./sounds.js').then(({ playSound }) => playSound('done'));
       });
     }
   });
