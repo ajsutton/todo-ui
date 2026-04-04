@@ -2829,3 +2829,41 @@ body.has-p0::before {
   color: var(--accent);
   font-weight: 600;
 }
+
+/* Urgency column */
+.urgency-cell {
+  width: 80px;
+  min-width: 60px;
+}
+
+.urgency-bar-wrap {
+  position: relative;
+  height: 16px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  cursor: default;
+}
+
+.urgency-bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  border-radius: 3px;
+  opacity: 0.75;
+  transition: width 0.3s ease;
+}
+
+.urgency-bar-label {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1;
+  z-index: 1;
+}

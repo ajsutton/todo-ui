@@ -99,16 +99,17 @@ export function filterItems(items, { filterType, filterStatus, searchQuery }, ge
   });
 }
 
-function getColValue(item, col) {
+function getColValue(item, col, urgencyFn) {
   if (col === 'priority') {
     const n = parseInt((item.priority || '').replace('P', ''));
     return Number.isNaN(n) ? 99 : n;
   }
   if (col === 'id') return parseInt((item.id || '').replace('TODO-', '')) || 0;
+  if (col === 'urgency') return urgencyFn ? urgencyFn(item) : 0;
   return (item[col] || '').toLowerCase();
 }
 
-export function sortItems(items, sortColumn, sortDirection, sortKeys) {
+export function sortItems(items, sortColumn, sortDirection, sortKeys, urgencyFn) {
   // sortKeys: optional array of { col, dir } for multi-sort
   const keys = sortKeys && sortKeys.length > 0
     ? sortKeys
@@ -116,8 +117,8 @@ export function sortItems(items, sortColumn, sortDirection, sortKeys) {
 
   return items.sort((a, b) => {
     for (const { col, dir } of keys) {
-      const aVal = getColValue(a, col);
-      const bVal = getColValue(b, col);
+      const aVal = getColValue(a, col, urgencyFn);
+      const bVal = getColValue(b, col, urgencyFn);
       const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
       if (cmp !== 0) return dir === 'asc' ? cmp : -cmp;
     }
