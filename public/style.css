@@ -2260,6 +2260,13 @@ tbody tr {
 }
 .undo-btn:hover { background: rgba(255,255,255,0.35); }
 
+/* Row refresh flash */
+@keyframes row-refresh-flash {
+  0%, 100% { background: transparent; }
+  50%       { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+}
+.row-refreshing { animation: row-refresh-flash 1s ease infinite; }
+
 /* Copy toast */
 .copy-toast {
   position: fixed;
