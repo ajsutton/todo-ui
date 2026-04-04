@@ -12,6 +12,7 @@ import { initKeyboard, showShortcutOverlay, closeShortcutOverlay } from './keybo
 import { initTheme, toggleTheme } from './theme.js';
 import { requestNotificationPermission, canNotify } from './notifications.js';
 import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar } from './bulk.js';
+import { showSuggestionBanner } from './suggestion.js';
 
 function showUpdateDialog(results, discovered, errors) {
   errors = errors || [];
@@ -297,6 +298,9 @@ document.addEventListener('DOMContentLoaded', () => {
       syncUrl();
     }
   });
+
+  // "What's next?" suggestion
+  document.getElementById('show-next')?.addEventListener('click', showSuggestionBanner);
 
   // Bulk mode
   document.getElementById('bulk-mode-toggle')?.addEventListener('click', toggleBulkMode);
