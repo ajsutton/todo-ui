@@ -11,6 +11,7 @@ import { sendClaudePrompt, handleClaudeStatus, pushHistory, resetHistoryNav, nav
 import { initKeyboard, showShortcutOverlay, closeShortcutOverlay } from './keyboard.js';
 import { initTheme, toggleTheme, initAccentPicker, showAccentPicker } from './theme.js';
 import { initSessionBadge } from './session.js';
+import { initStreakBadge } from './streak.js';
 import { requestNotificationPermission, canNotify } from './notifications.js';
 import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar, showBulkTagPicker } from './bulk.js';
 import { showSuggestionBanner } from './suggestion.js';
@@ -183,6 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initAccentPicker();
   initSessionBadge();
+  initStreakBadge();
 
   // Connect WebSocket
   connectWebSocket();
