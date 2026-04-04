@@ -20,6 +20,21 @@ function truncateDesc(item) {
   return d.length > 40 ? d.slice(0, 39) + '…' : d;
 }
 
+function applyStatusClass(el, status) {
+  if (!status) return;
+  const s = status.toLowerCase();
+  if (s.includes('failing') || s.includes('ci fail') || s.includes('error')) el.classList.add('status-failing');
+  else if (s.includes('passing') || s.includes('ci pass')) el.classList.add('status-passing');
+  if (s.includes('approved')) el.classList.add('status-approved');
+  if (s.includes('changes requested')) el.classList.add('status-changes-requested');
+  if (s.includes('draft')) el.classList.add('status-draft');
+  if (s.includes('merge queue') || s.includes('merge conflict')) el.classList.add('status-merge-issue');
+  if (s === 'merged') el.classList.add('status-merged');
+  if (s === 'closed') el.classList.add('status-closed');
+  if (s.includes('blocked')) el.classList.add('status-blocked-text');
+  if (s.includes('pending')) el.classList.add('status-pending');
+}
+
 // Lazy-loaded to avoid circular dependency (detail.js imports render.js indirectly)
 function getShowDetail() {
   return import('./detail.js').then(m => m.showDetail);
@@ -180,12 +195,12 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
   tdDesc.appendChild(descSpan);
   tr.appendChild(tdDesc);
 
-  // Status cell
+  // Status cell with rich color coding
   const tdStatus = document.createElement('td');
+  tdStatus.className = 'status-cell';
   const sEmoji = statusEmoji(item);
   tdStatus.textContent = (sEmoji ? sEmoji + ' ' : '') + item.status;
-  if (item.status.toLowerCase().includes('failing')) tdStatus.classList.add('status-failing');
-  if (item.status.toLowerCase().includes('passing')) tdStatus.classList.add('status-passing');
+  applyStatusClass(tdStatus, item.status);
   tr.appendChild(tdStatus);
 
   // Priority cell
@@ -318,10 +333,10 @@ export function buildSubItemRow(sub, parentId) {
   tr.appendChild(tdDesc);
 
   const tdStatus = document.createElement('td');
+  tdStatus.className = 'status-cell';
   const status = sub.currentStatus;
   tdStatus.textContent = status;
-  if (status.toLowerCase().includes('failing')) tdStatus.classList.add('status-failing');
-  if (status.toLowerCase().includes('passing')) tdStatus.classList.add('status-passing');
+  applyStatusClass(tdStatus, status);
   if (status.toLowerCase().includes('merged')) tdStatus.classList.add('sub-item-merged');
   tr.appendChild(tdStatus);
 
