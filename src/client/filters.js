@@ -3,11 +3,12 @@
 /**
  * Parse a search query string into structured filters.
  * Supports: p:0, p:0-2, type:pr, status:failing, blocked, overdue,
- *           due:today, due:week, due:N (within N days), tag:name
+ *           due:today, due:week, due:N (within N days), tag:name,
+ *           @repo (filter by GitHub repo, partial match)
  * Remaining terms match description.
  */
 export function parseSearchQuery(query) {
-  const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const tokens = query.trim().split(/\s+/).filter(Boolean);
   const result = {
     priorityMin: null,  // number
     priorityMax: null,  // number
@@ -15,48 +16,55 @@ export function parseSearchQuery(query) {
     statusFilter: null, // string
     tagFilter: null,    // string
     dueFilter: null,    // 'today' | 'week' | number (days)
+    repoFilter: null,   // string (partial repo name match, lowercased)
     blocked: false,
     overdue: false,
     textTerms: [],
   };
 
   for (const token of tokens) {
-    if (token === 'blocked') {
+    const tokenLower = token.toLowerCase();
+    if (tokenLower === 'blocked') {
       result.blocked = true;
       continue;
     }
-    if (token === 'overdue') {
+    if (tokenLower === 'overdue') {
       result.overdue = true;
       continue;
     }
-    const pMatch = token.match(/^p:(\d+)(?:-(\d+))?$/);
+    // @repo filter
+    if (token.startsWith('@') && token.length > 1) {
+      result.repoFilter = token.slice(1).toLowerCase();
+      continue;
+    }
+    const pMatch = tokenLower.match(/^p:(\d+)(?:-(\d+))?$/);
     if (pMatch) {
       result.priorityMin = parseInt(pMatch[1], 10);
       result.priorityMax = pMatch[2] !== undefined ? parseInt(pMatch[2], 10) : result.priorityMin;
       continue;
     }
-    const typeMatch = token.match(/^type:(.+)$/);
+    const typeMatch = tokenLower.match(/^type:(.+)$/);
     if (typeMatch) {
       result.typeFilter = typeMatch[1];
       continue;
     }
-    const statusMatch = token.match(/^status:(.+)$/);
+    const statusMatch = tokenLower.match(/^status:(.+)$/);
     if (statusMatch) {
       result.statusFilter = statusMatch[1];
       continue;
     }
-    const tagMatch = token.match(/^tag:(.+)$/);
+    const tagMatch = tokenLower.match(/^tag:(.+)$/);
     if (tagMatch) {
       result.tagFilter = tagMatch[1];
       continue;
     }
-    const dueMatch = token.match(/^due:(today|week|\d+)$/);
+    const dueMatch = tokenLower.match(/^due:(today|week|\d+)$/);
     if (dueMatch) {
       const val = dueMatch[1];
       result.dueFilter = val === 'today' ? 'today' : val === 'week' ? 'week' : parseInt(val, 10);
       continue;
     }
-    result.textTerms.push(token);
+    result.textTerms.push(tokenLower);
   }
 
   return result;
@@ -113,6 +121,11 @@ export function filterItems(items, { filterType, filterStatus, searchQuery }, ge
         const cutoffStr = cutoff.toISOString().slice(0, 10);
         if (item.due < today || item.due > cutoffStr) return false;
       }
+    }
+
+    if (parsed.repoFilter) {
+      const repo = (item.repo || '').toLowerCase();
+      if (!repo.includes(parsed.repoFilter)) return false;
     }
 
     // Text terms — must all match description
