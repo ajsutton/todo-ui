@@ -361,6 +361,7 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
   // Due cell with relative display and overdue/today highlighting
   const tdDue = document.createElement('td');
   tdDue.classList.add('editable');
+  tdDue.dataset.col = 'due';
   if (item.due) {
     tdDue.textContent = formatDueDate(item.due);
     tdDue.title = item.due; // show raw date on hover

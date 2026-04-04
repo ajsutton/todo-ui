@@ -4,7 +4,7 @@ import { showDetail } from './detail.js';
 import { enterDetailEditMode } from './detail.js';
 import { renderTable } from './render.js';
 import { syncUrl } from './url.js';
-import { showPriorityPicker } from './pickers.js';
+import { showPriorityPicker, showDatePicker } from './pickers.js';
 import { openNewItemForm, isFormOpen, closeNewItemForm } from './newitem.js';
 import { showWeekView, closeWeekView, isWeekViewOpen } from './weekview.js';
 import { showDigest, closeDigest, isDigestOpen } from './digest.js';
@@ -307,6 +307,21 @@ export function initKeyboard() {
               }
               import('./render.js').then(m => m.renderTable());
             });
+          }
+        }
+        break;
+      }
+      case 'u': {
+        // Quick-set due date on selected row
+        const rowsU = getVisibleRows();
+        if (appState.selectedRowIndex >= 0 && appState.selectedRowIndex < rowsU.length) {
+          e.preventDefault();
+          const row = rowsU[appState.selectedRowIndex];
+          const id = row.dataset.itemId;
+          const item = appState.items.find(i => i.id === id);
+          if (item) {
+            const dueCell = row.querySelector('[data-col="due"]');
+            if (dueCell) showDatePicker(dueCell, item);
           }
         }
         break;
