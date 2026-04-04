@@ -13,6 +13,7 @@ import {
   addDiscoveredItems,
   runClaudePrompt,
   saveDetailMarkdown,
+  addManualItem,
 } from "./lib/actions.ts";
 import { appendLogEntry, getLogEntries } from "./lib/update-log.ts";
 import { generateStandupReport, buildStandupClaudePrompt } from "./lib/standup.ts";
@@ -380,6 +381,27 @@ const server = Bun.serve({
         setDue(watcher.getDir(), id, body.due ?? "");
         watcher.reload();
         return jsonResponse({ ok: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return jsonResponse({ error: message }, 400);
+      }
+    }
+
+    if (req.method === "POST" && pathname === "/api/items") {
+      try {
+        const body = (await req.json()) as {
+          description?: string;
+          type?: string;
+          priority?: string;
+          status?: string;
+        };
+        if (!body.description?.trim()) return jsonResponse({ error: "Missing description" }, 400);
+        const type = body.type || "Issue";
+        const priority = body.priority || "P3";
+        const status = body.status || "Open";
+        const id = addManualItem(watcher.getDir(), body.description.trim(), type, priority, status);
+        watcher.reload();
+        return jsonResponse({ ok: true, id });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return jsonResponse({ error: message }, 400);

@@ -1489,6 +1489,60 @@ export function addDiscoveredItems(todoDir: string, newItems: DiscoveredItem[]):
   }
 }
 
+export function addManualItem(
+  todoDir: string,
+  description: string,
+  type: string,
+  priority: string,
+  status: string,
+): string {
+  const filePath = path.join(todoDir, "TODO.md");
+  const content = readFileSync(filePath, "utf-8");
+  const lines = content.split("\n");
+
+  // Find highest existing TODO-N id
+  let maxId = 0;
+  for (const line of lines) {
+    const match = line.match(/\|\s*TODO-(\d+)\s*\|/);
+    if (match) {
+      const num = parseInt(match[1]!, 10);
+      if (num > maxId) maxId = num;
+    }
+  }
+
+  // Find insertion point (after last table row)
+  let lastRowIdx = -1;
+  let inTable = false;
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i]!.trim();
+    if (trimmed.match(/^\|\s*ID/)) { inTable = true; continue; }
+    if (inTable && trimmed.match(/^\|\s*-+/)) continue;
+    if (inTable && trimmed.startsWith("|")) {
+      lastRowIdx = i;
+    } else if (inTable && !trimmed.startsWith("|")) {
+      break;
+    }
+  }
+
+  if (lastRowIdx === -1) {
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i]!.trim().match(/^\|\s*-+/)) {
+        lastRowIdx = i;
+        break;
+      }
+    }
+  }
+
+  if (lastRowIdx === -1) throw new Error("Could not find table in TODO.md");
+
+  const id = `TODO-${maxId + 1}`;
+  const safeDesc = description.replace(/\|/g, "\\|");
+  const newRow = `| ${id} | ${safeDesc} | ${type} | ${status} | ${priority} | | |`;
+  lines.splice(lastRowIdx + 1, 0, newRow);
+  atomicWrite(filePath, lines.join("\n"));
+  return id;
+}
+
 export async function* runClaudePrompt(
   todoDir: string,
   prompt: string,

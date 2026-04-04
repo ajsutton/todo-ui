@@ -2240,6 +2240,62 @@ tbody tr {
 .undo-btn:hover { background: rgba(255,255,255,0.35); }
 
 /* Ambient P0 urgency indicator — subtle left border pulse */
+/* Quick-add new item form */
+.new-item-form {
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg));
+  border-bottom: 1px solid var(--border);
+  animation: slide-down 0.15s ease;
+}
+.new-item-form.hidden { display: none; }
+
+.new-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.new-item-icon {
+  font-size: 16px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.new-item-desc {
+  flex: 1;
+  min-width: 200px;
+  font-size: 13px;
+  padding: 5px 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--fg);
+  outline: none;
+}
+.new-item-desc:focus { border-color: var(--accent); }
+
+.new-item-type,
+.new-item-priority {
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--fg);
+  outline: none;
+  cursor: pointer;
+}
+
+.new-item-status {
+  font-size: 12px;
+  margin-top: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.new-item-ok    { color: var(--status-pass); background: color-mix(in srgb, var(--status-pass) 10%, transparent); }
+.new-item-error { color: var(--status-fail); background: color-mix(in srgb, var(--status-fail) 10%, transparent); }
+
 body.has-p0::before {
   content: '';
   position: fixed;

@@ -5,6 +5,7 @@ import { enterDetailEditMode } from './detail.js';
 import { renderTable } from './render.js';
 import { syncUrl } from './url.js';
 import { showPriorityPicker } from './pickers.js';
+import { openNewItemForm, isFormOpen, closeNewItemForm } from './newitem.js';
 
 function getVisibleRows() {
   return Array.from(document.querySelectorAll('#todo-body tr[data-item-id]'));
@@ -210,6 +211,11 @@ export function initKeyboard() {
       case 'f':
         e.preventDefault();
         toggleFocusMode();
+        break;
+      case 'n':
+        e.preventDefault();
+        if (isFormOpen()) closeNewItemForm();
+        else openNewItemForm();
         break;
       case 'p': {
         // Quick-set priority on selected row
