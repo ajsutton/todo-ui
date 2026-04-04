@@ -18,6 +18,7 @@ import { initHoverCards } from './hovercard.js';
 import { initQuickAdd } from './quickadd.js';
 import { initPalette } from './palette.js';
 import { toggleGroupBy, isGroupByMode } from './groupby.js';
+import { renderPresetsBar, showSavePresetDialog } from './presets.js';
 import { initSearchHistory, recordSearch, hideDropdown } from './searchhistory.js';
 
 function showUpdateDialog(results, discovered, errors) {
@@ -353,6 +354,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // "What's next?" suggestion
   document.getElementById('show-next')?.addEventListener('click', showSuggestionBanner);
+
+  // Saved filter presets
+  renderPresetsBar();
+  document.getElementById('save-preset-btn')?.addEventListener('click', showSavePresetDialog);
 
   // Group-by toggle
   const groupbyBtn = document.getElementById('groupby-toggle');
