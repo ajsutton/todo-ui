@@ -224,6 +224,24 @@ export function initKeyboard() {
         if (isFormOpen()) closeNewItemForm();
         else openNewItemForm();
         break;
+      case 'r': {
+        // Refresh GitHub status of selected row
+        const rows4 = getVisibleRows();
+        if (appState.selectedRowIndex >= 0 && appState.selectedRowIndex < rows4.length) {
+          e.preventDefault();
+          const row = rows4[appState.selectedRowIndex];
+          const id = row.dataset.itemId;
+          const item = appState.items.find(i => i.id === id);
+          if (item?.githubUrl) {
+            // Flash the row
+            row.classList.add('row-refreshing');
+            fetch('/api/refresh/' + id, { method: 'POST' })
+              .catch(() => {})
+              .finally(() => row.classList.remove('row-refreshing'));
+          }
+        }
+        break;
+      }
       case 'c': {
         // Copy item ID + description to clipboard
         const rows3 = getVisibleRows();
