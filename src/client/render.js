@@ -263,7 +263,7 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
         pushUndo(`Marked "${truncateDesc(item)}" active`, () => markComplete(item.id));
       } else {
         markComplete(item.id).then(() => {
-          import('./confetti.js').then(({ triggerConfetti }) => triggerConfetti());
+          import('./confetti.js').then(({ triggerConfetti }) => triggerConfetti(item.priority));
         });
         pushUndo(`Marked "${truncateDesc(item)}" done`, () => markIncomplete(item.id));
       }

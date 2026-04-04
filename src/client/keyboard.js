@@ -77,7 +77,7 @@ function doneSelected() {
       markIncomplete(id);
     } else {
       markComplete(id).then(() => {
-        import('./confetti.js').then(({ triggerConfetti }) => triggerConfetti());
+        import('./confetti.js').then(({ triggerConfetti }) => triggerConfetti(item.priority));
       });
     }
   });
