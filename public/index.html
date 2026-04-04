@@ -44,9 +44,27 @@
       <option value="done">Done</option>
     </select>
     <input type="search" id="filter-search" placeholder="Search..." autocomplete="off" title="Search: p:0, p:0-2, type:pr, status:failing, blocked, overdue, or text">
+    <button id="bulk-mode-toggle" class="btn-small" title="Select multiple items">Select</button>
   </div>
 
   <div id="stats-bar" class="stats-bar"></div>
+
+  <div id="bulk-toolbar" class="bulk-toolbar hidden">
+    <span class="bulk-count"></span>
+    <div class="bulk-actions">
+      <button data-bulk-action="done" class="btn-small" disabled>Mark Done</button>
+      <button data-bulk-action="active" class="btn-small" disabled>Mark Active</button>
+      <div class="bulk-priority-group">
+        <span class="bulk-label">Set priority:</span>
+        <button data-bulk-action="priority" data-priority="P0" class="btn-small priority-p0" disabled>P0</button>
+        <button data-bulk-action="priority" data-priority="P1" class="btn-small priority-p1" disabled>P1</button>
+        <button data-bulk-action="priority" data-priority="P2" class="btn-small priority-p2" disabled>P2</button>
+        <button data-bulk-action="priority" data-priority="P3" class="btn-small priority-p3" disabled>P3</button>
+      </div>
+      <button data-bulk-action="clear" class="btn-small">Clear</button>
+    </div>
+    <button id="bulk-mode-exit" class="btn-small btn-secondary">Exit</button>
+  </div>
 
   <table id="todo-table">
     <thead>
