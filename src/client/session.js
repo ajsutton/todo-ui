@@ -1,5 +1,6 @@
 // Session tracking: items completed since page load, session duration
 // Purely in-memory — resets on page refresh.
+import { recordCompletion, renderStreakBadge } from './streak.js';
 
 const sessionStart = Date.now();
 const completedThisSession = []; // { id, description, completedAt }
@@ -17,6 +18,9 @@ export function updateSessionStats(items) {
       // Newly completed this session
       const desc = (item.description || item.id).replace(/^\[.*?\]\(.*?\)\s*/, '').trim();
       completedThisSession.push({ id: item.id, description: desc, completedAt: Date.now() });
+      const today = new Date().toISOString().slice(0, 10);
+      recordCompletion(today);
+      renderStreakBadge();
     }
   }
   // Update done set
