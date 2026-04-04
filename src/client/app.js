@@ -12,6 +12,7 @@ import { initKeyboard, showShortcutOverlay, closeShortcutOverlay } from './keybo
 import { initTheme, toggleTheme, initAccentPicker, showAccentPicker } from './theme.js';
 import { initSessionBadge } from './session.js';
 import { initStreakBadge } from './streak.js';
+import { initDensity } from './density.js';
 import { requestNotificationPermission, canNotify } from './notifications.js';
 import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar, showBulkTagPicker } from './bulk.js';
 import { showSuggestionBanner } from './suggestion.js';
@@ -183,6 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize theme, accent color, and session tracking
   initTheme();
   initAccentPicker();
+  initDensity();
   initSessionBadge();
   initStreakBadge();
 

@@ -16,6 +16,7 @@ import { renderTagPills, showTagPicker, getTagsForItem } from './tags.js';
 import { getSnoozedIds } from './snooze.js';
 import { pushUndo } from './undo.js';
 import { showContextMenu } from './contextmenu.js';
+import { applyDensity } from './density.js';
 
 // Stale IDs maintained across renders
 let staleIds = new Set();
@@ -121,6 +122,7 @@ function renderSkeletonTable() {
 
 export function renderTable() {
   if (!appState.dataLoaded) { renderSkeletonTable(); return; }
+  applyDensity();
   const allItems = [...appState.items];
   const snoozed = getSnoozedIds();
   let items = filterItems(allItems, {
