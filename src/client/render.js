@@ -10,6 +10,7 @@ import { computeUrgency, urgencyColor } from './urgency.js';
 import { recordSnapshot, renderSparkline } from './history.js';
 import { renderTimerBtn, showTimerPicker, getTimerItemId } from './timer.js';
 import { isGroupByMode, groupItems, buildGroupHeaderRow, isGroupCollapsed } from './groupby.js';
+import { getSnoozedIds } from './snooze.js';
 import { pushUndo } from './undo.js';
 
 // Stale IDs maintained across renders
@@ -79,11 +80,16 @@ function updateSearchBadge(shown, total) {
 
 export function renderTable() {
   const allItems = [...appState.items];
+  const snoozed = getSnoozedIds();
   let items = filterItems(allItems, {
     filterType: appState.filterType,
     filterStatus: appState.filterStatus,
     searchQuery: appState.searchQuery,
   });
+  // Hide snoozed items (unless explicitly showing done/all)
+  if (appState.filterStatus !== 'done' && snoozed.size > 0) {
+    items = items.filter(i => !snoozed.has(i.id));
+  }
   items = sortItems(items, appState.sortColumn, appState.sortDirection, appState.sortKeys);
 
   updateSearchBadge(items.length, allItems.length);
@@ -286,6 +292,23 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
       }
     };
     actionsWrap.appendChild(refreshBtn);
+  }
+
+  // Snooze button
+  if (!isDone) {
+    const snoozeBtn = document.createElement('button');
+    snoozeBtn.textContent = '💤';
+    snoozeBtn.className = 'btn-small btn-icon-inline snooze-btn';
+    snoozeBtn.title = 'Snooze this item';
+    snoozeBtn.onclick = (e) => {
+      e.stopPropagation();
+      import('./snooze.js').then(({ showSnoozePicker }) => {
+        showSnoozePicker(item.id, snoozeBtn, () => {
+          import('./render.js').then(m => m.renderTable());
+        });
+      });
+    };
+    actionsWrap.appendChild(snoozeBtn);
   }
 
   // Focus timer button
