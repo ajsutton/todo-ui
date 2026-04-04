@@ -10,6 +10,7 @@ import { computeUrgency, urgencyColor } from './urgency.js';
 import { recordSnapshot, renderSparkline } from './history.js';
 import { renderTimerBtn, showTimerPicker, getTimerItemId } from './timer.js';
 import { isGroupByMode, groupItems, buildGroupHeaderRow, isGroupCollapsed } from './groupby.js';
+import { renderHeatmap } from './heatmap.js';
 import { getSnoozedIds } from './snooze.js';
 import { pushUndo } from './undo.js';
 
@@ -498,8 +499,12 @@ export function renderStats() {
       <span class="stats-row-label">Priority</span>
       ${segmentedBar(priEntries, active.length, p => priColors[p] || 'var(--fg-secondary)', 'priority', null)}
     </div>
-    <div class="stats-alerts">${alerts.join('')}</div>
+    <div class="stats-alerts">${alerts.join('')}<span id="heatmap-container"></span></div>
   `;
+
+  // Render heatmap into its container
+  const heatmapContainer = document.getElementById('heatmap-container');
+  if (heatmapContainer) renderHeatmap(heatmapContainer);
 
   // Wire up segment click filtering
   bar.querySelectorAll('[data-filter-key]').forEach(el => {
