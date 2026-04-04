@@ -1,0 +1,281 @@
+import { describe, it, expect } from 'bun:test';
+import { filterItems, sortItems, filterSubItem, parseSearchQuery } from './filters.js';
+
+const makeItem = (overrides = {}) => ({
+  id: 'TODO-1',
+  description: 'Test item',
+  descriptionHtml: 'Test item',
+  type: 'PR',
+  status: 'Open',
+  blocked: false,
+  priority: 'P2',
+  due: '',
+  doneDate: '',
+  ...overrides,
+});
+
+const makeSub = (overrides = {}) => ({
+  repo: 'ethereum-optimism/optimism',
+  number: 123,
+  title: 'Fix bug',
+  currentStatus: 'Open',
+  currentPriority: 'P2',
+  githubUrl: 'https://github.com/ethereum-optimism/optimism/pull/123',
+  ...overrides,
+});
+
+// ---- parseSearchQuery ----
+
+describe('parseSearchQuery', () => {
+  it('returns empty result for empty string', () => {
+    const r = parseSearchQuery('');
+    expect(r.priorityMin).toBe(null);
+    expect(r.typeFilter).toBe(null);
+    expect(r.statusFilter).toBe(null);
+    expect(r.blocked).toBe(false);
+    expect(r.overdue).toBe(false);
+    expect(r.textTerms).toEqual([]);
+  });
+
+  it('parses p:0 correctly', () => {
+    const r = parseSearchQuery('p:0');
+    expect(r.priorityMin).toBe(0);
+    expect(r.priorityMax).toBe(0);
+  });
+
+  it('parses p:0-2 range', () => {
+    const r = parseSearchQuery('p:0-2');
+    expect(r.priorityMin).toBe(0);
+    expect(r.priorityMax).toBe(2);
+  });
+
+  it('parses type:pr', () => {
+    const r = parseSearchQuery('type:pr');
+    expect(r.typeFilter).toBe('pr');
+  });
+
+  it('parses status:failing', () => {
+    const r = parseSearchQuery('status:failing');
+    expect(r.statusFilter).toBe('failing');
+  });
+
+  it('parses blocked keyword', () => {
+    const r = parseSearchQuery('blocked');
+    expect(r.blocked).toBe(true);
+  });
+
+  it('parses overdue keyword', () => {
+    const r = parseSearchQuery('overdue');
+    expect(r.overdue).toBe(true);
+  });
+
+  it('puts remaining terms in textTerms', () => {
+    const r = parseSearchQuery('foo bar baz');
+    expect(r.textTerms).toEqual(['foo', 'bar', 'baz']);
+  });
+
+  it('mixes field filters and text terms', () => {
+    const r = parseSearchQuery('p:0 review type:pr');
+    expect(r.priorityMin).toBe(0);
+    expect(r.typeFilter).toBe('pr');
+    expect(r.textTerms).toEqual(['review']);
+  });
+});
+
+// ---- filterItems ----
+
+describe('filterItems - type filter', () => {
+  const items = [
+    makeItem({ type: 'PR', id: 'TODO-1' }),
+    makeItem({ type: 'Review', id: 'TODO-2' }),
+    makeItem({ type: 'Issue', id: 'TODO-3' }),
+  ];
+
+  it('returns all items when no type filter', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: '' });
+    expect(res.length).toBe(3);
+  });
+
+  it('filters by PR type', () => {
+    const res = filterItems(items, { filterType: 'PR', filterStatus: '', searchQuery: '' });
+    expect(res.length).toBe(1);
+    expect(res[0].type).toBe('PR');
+  });
+});
+
+describe('filterItems - status filter', () => {
+  const items = [
+    makeItem({ id: 'TODO-1', doneDate: '2024-01-01' }),
+    makeItem({ id: 'TODO-2', doneDate: '' }),
+  ];
+
+  it('filters active items', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: 'active', searchQuery: '' });
+    expect(res.length).toBe(1);
+    expect(res[0].id).toBe('TODO-2');
+  });
+
+  it('filters done items', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: 'done', searchQuery: '' });
+    expect(res.length).toBe(1);
+    expect(res[0].id).toBe('TODO-1');
+  });
+
+  it('returns all items when no status filter', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: '' });
+    expect(res.length).toBe(2);
+  });
+});
+
+describe('filterItems - text search', () => {
+  const items = [
+    makeItem({ id: 'TODO-1', description: 'Fix the login bug' }),
+    makeItem({ id: 'TODO-2', description: 'Update dashboard UI' }),
+  ];
+
+  it('filters by description text', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'login' });
+    expect(res.length).toBe(1);
+    expect(res[0].id).toBe('TODO-1');
+  });
+
+  it('is case insensitive', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'DASHBOARD' });
+    expect(res.length).toBe(1);
+    expect(res[0].id).toBe('TODO-2');
+  });
+});
+
+describe('filterItems - field-specific search', () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
+  const items = [
+    makeItem({ id: 'TODO-1', priority: 'P0', type: 'PR', status: 'CI failing', blocked: false, due: '', doneDate: '' }),
+    makeItem({ id: 'TODO-2', priority: 'P1', type: 'Review', status: 'Approved', blocked: true, due: '', doneDate: '' }),
+    makeItem({ id: 'TODO-3', priority: 'P3', type: 'Issue', status: 'Open', blocked: false, due: yesterday, doneDate: '' }),
+    makeItem({ id: 'TODO-4', priority: 'P2', type: 'Workstream', status: 'Draft', blocked: false, due: '', doneDate: '' }),
+  ];
+
+  it('filters by p:0', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'p:0' });
+    expect(res.length).toBe(1);
+    expect(res[0].id).toBe('TODO-1');
+  });
+
+  it('filters by p:0-2 range', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'p:0-2' });
+    const ids = res.map(i => i.id);
+    expect(ids).toContain('TODO-1');
+    expect(ids).toContain('TODO-2');
+    expect(ids).toContain('TODO-4');
+    expect(ids).not.toContain('TODO-3');
+  });
+
+  it('filters by type:review', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'type:review' });
+    expect(res.length).toBe(1);
+    expect(res[0].id).toBe('TODO-2');
+  });
+
+  it('filters by status:failing', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'status:failing' });
+    expect(res.length).toBe(1);
+    expect(res[0].id).toBe('TODO-1');
+  });
+
+  it('filters blocked items', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'blocked' });
+    expect(res.length).toBe(1);
+    expect(res[0].id).toBe('TODO-2');
+  });
+
+  it('filters overdue items', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'overdue' });
+    expect(res.length).toBe(1);
+    expect(res[0].id).toBe('TODO-3');
+  });
+
+  it('combines p:0 and type filter as AND', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'p:0 failing' });
+    expect(res.length).toBe(1);
+    expect(res[0].id).toBe('TODO-1');
+  });
+});
+
+// ---- sortItems ----
+
+describe('sortItems', () => {
+  const items = [
+    makeItem({ id: 'TODO-3', priority: 'P2', description: 'Bravo' }),
+    makeItem({ id: 'TODO-1', priority: 'P0', description: 'Alpha' }),
+    makeItem({ id: 'TODO-2', priority: 'P1', description: 'Charlie' }),
+  ];
+
+  it('sorts by priority ascending', () => {
+    const res = sortItems([...items], 'priority', 'asc');
+    expect(res[0].priority).toBe('P0');
+    expect(res[1].priority).toBe('P1');
+    expect(res[2].priority).toBe('P2');
+  });
+
+  it('sorts by priority descending', () => {
+    const res = sortItems([...items], 'priority', 'desc');
+    expect(res[0].priority).toBe('P2');
+    expect(res[2].priority).toBe('P0');
+  });
+
+  it('sorts by description ascending', () => {
+    const res = sortItems([...items], 'description', 'asc');
+    expect(res[0].description).toBe('Alpha');
+    expect(res[1].description).toBe('Bravo');
+    expect(res[2].description).toBe('Charlie');
+  });
+
+  it('sorts by description descending', () => {
+    const res = sortItems([...items], 'description', 'desc');
+    expect(res[0].description).toBe('Charlie');
+  });
+
+  it('sorts by due date ascending', () => {
+    const dueItems = [
+      makeItem({ due: '2024-03-01' }),
+      makeItem({ due: '2024-01-01' }),
+      makeItem({ due: '2024-02-01' }),
+    ];
+    const res = sortItems(dueItems, 'due', 'asc');
+    expect(res[0].due).toBe('2024-01-01');
+    expect(res[2].due).toBe('2024-03-01');
+  });
+});
+
+// ---- filterSubItem ----
+
+describe('filterSubItem', () => {
+  const activeSub = makeSub({ currentStatus: 'Open' });
+  const mergedSub = makeSub({ currentStatus: 'Merged' });
+  const closedSub = makeSub({ currentStatus: 'Closed' });
+
+  it('shows active sub items when filterStatus is active', () => {
+    expect(filterSubItem(activeSub, { filterStatus: 'active', searchQuery: '' })).toBe(true);
+  });
+
+  it('hides merged sub items when filterStatus is active', () => {
+    expect(filterSubItem(mergedSub, { filterStatus: 'active', searchQuery: '' })).toBe(false);
+  });
+
+  it('shows merged/closed items when filterStatus is done', () => {
+    expect(filterSubItem(mergedSub, { filterStatus: 'done', searchQuery: '' })).toBe(true);
+    expect(filterSubItem(closedSub, { filterStatus: 'done', searchQuery: '' })).toBe(true);
+  });
+
+  it('filters by search query in title', () => {
+    const sub = makeSub({ title: 'Fix login issue' });
+    expect(filterSubItem(sub, { filterStatus: '', searchQuery: 'login' })).toBe(true);
+    expect(filterSubItem(sub, { filterStatus: '', searchQuery: 'dashboard' })).toBe(false);
+  });
+
+  it('filters by repo name', () => {
+    expect(filterSubItem(activeSub, { filterStatus: '', searchQuery: 'optimism' })).toBe(true);
+  });
+});
