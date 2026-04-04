@@ -1,4 +1,19 @@
 // Entry point — wires up all modules on DOMContentLoaded
+
+// Shoelace web components
+import { setBasePath } from '@shoelace-style/shoelace/dist/utilities/base-path.js';
+import '@shoelace-style/shoelace/dist/components/button/button.js';
+import '@shoelace-style/shoelace/dist/components/select/select.js';
+import '@shoelace-style/shoelace/dist/components/option/option.js';
+import '@shoelace-style/shoelace/dist/components/input/input.js';
+import '@shoelace-style/shoelace/dist/components/textarea/textarea.js';
+import '@shoelace-style/shoelace/dist/components/dialog/dialog.js';
+import '@shoelace-style/shoelace/dist/components/tab-group/tab-group.js';
+import '@shoelace-style/shoelace/dist/components/tab/tab.js';
+import '@shoelace-style/shoelace/dist/components/tab-panel/tab-panel.js';
+
+setBasePath('/sl/');
+
 import { appState } from './state.js';
 import { syncUrl } from './url.js';
 import { renderTable, fetchLastUpdateTime, setLastUpdate } from './render.js';
@@ -37,7 +52,7 @@ function showUpdateDialog(results, discovered, errors) {
   const dialog = document.getElementById('update-dialog');
   const content = document.getElementById('update-dialog-content');
   const actions = document.getElementById('update-dialog-actions');
-  const title = document.getElementById('update-dialog-title');
+  dialog.label = 'Update Results';
   content.innerHTML = '';
 
   const hasChanges = results.length > 0;
@@ -153,18 +168,18 @@ function showUpdateDialog(results, discovered, errors) {
 
   actions.classList.add('hidden');
   dialog._discovered = [];
-  dialog.classList.remove('hidden');
+  dialog.show();
 }
 
 function closeUpdateDialog() {
-  document.getElementById('update-dialog').classList.add('hidden');
+  document.getElementById('update-dialog').hide();
 }
 
 async function refreshAll() {
   const btn = document.getElementById('refresh-all');
   const progress = document.getElementById('update-progress');
   const fill = document.getElementById('progress-fill');
-  btn.classList.add('loading');
+  btn.setAttribute('loading', '');
   btn.disabled = true;
   fill.style.width = '0%';
   progress.classList.remove('hidden');
@@ -178,7 +193,7 @@ async function refreshAll() {
     console.error('Failed to update all:', err);
     alert('Update failed: ' + (err.message || err));
   } finally {
-    btn.classList.remove('loading');
+    btn.removeAttribute('loading');
     btn.disabled = false;
     progress.classList.add('hidden');
   }
@@ -272,10 +287,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Filters
   const searchEl = document.getElementById('filter-search');
-  searchEl.oninput = (e) => {
+
+  function syncQuickFilterChips() {
+    document.querySelectorAll('.qf-chip').forEach(btn => {
+      btn.classList.toggle('active', appState.searchQuery === btn.dataset.query);
+    });
+  }
+
+  searchEl.addEventListener('sl-input', (e) => {
     appState.searchQuery = e.target.value;
+    syncQuickFilterChips();
     renderTable();
-  };
+  });
+  searchEl.addEventListener('sl-clear', () => {
+    appState.searchQuery = '';
+    syncQuickFilterChips();
+    syncUrl();
+    renderTable();
+  });
   searchEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && searchEl.value.trim().length >= 2) {
       recordSearch(searchEl.value.trim());
@@ -289,21 +318,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.dispatchEvent(new Event('search-changed'));
     renderTable();
   });
-  document.getElementById('filter-type').onchange = (e) => {
+  document.getElementById('filter-type').addEventListener('sl-change', (e) => {
     appState.filterType = e.target.value;
     renderTable();
-  };
-  document.getElementById('filter-status').onchange = (e) => {
+  });
+  document.getElementById('filter-status').addEventListener('sl-change', (e) => {
     appState.filterStatus = e.target.value;
     renderTable();
-  };
+  });
 
   // Quick filter chips
-  function syncQuickFilterChips() {
-    document.querySelectorAll('.qf-chip').forEach(btn => {
-      btn.classList.toggle('active', appState.searchQuery === btn.dataset.query);
-    });
-  }
   document.querySelectorAll('.qf-chip').forEach(btn => {
     btn.addEventListener('click', () => {
       const q = btn.dataset.query;
@@ -314,31 +338,22 @@ document.addEventListener('DOMContentLoaded', () => {
       renderTable();
     });
   });
-  // Keep chips in sync when search changes via text input
-  const _origSearchInput = searchEl.oninput;
-  searchEl.oninput = (e) => {
-    appState.searchQuery = e.target.value;
-    syncQuickFilterChips();
-    renderTable();
-  };
   // Initial chip sync on load and when search is changed externally (e.g. preset apply)
   syncQuickFilterChips();
   document.addEventListener('search-changed', syncQuickFilterChips);
 
   // Update log
   document.getElementById('show-log').onclick = (e) => { e.preventDefault(); showLogDialog(); };
-  document.getElementById('log-dialog-close').onclick = closeLogDialog;
   document.getElementById('log-close-btn').onclick = closeLogDialog;
   document.getElementById('log-load-more').onclick = () => loadLogPage(false);
 
   // Standup dialog
   document.getElementById('show-standup').onclick = () => showStandupDialog();
-  document.getElementById('standup-dialog-close').onclick = closeStandupDialog;
   document.getElementById('standup-close-btn').onclick = closeStandupDialog;
   document.getElementById('standup-copy-btn').onclick = copyStandupReport;
   document.getElementById('standup-claude-generate').onclick = generateStandupWithClaude;
-  document.querySelectorAll('#standup-dialog .tab-btn').forEach(btn => {
-    btn.onclick = () => switchStandupTab(btn.dataset.tab);
+  document.getElementById('standup-tab-group')?.addEventListener('sl-tab-show', (e) => {
+    switchStandupTab(e.detail.name);
   });
 
   // Refresh/update all
@@ -346,7 +361,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Update dialog
   document.getElementById('discovery-skip').onclick = closeUpdateDialog;
-  document.getElementById('update-dialog-close').onclick = closeUpdateDialog;
   document.getElementById('discovery-add').onclick = closeUpdateDialog;
 
   // Claude prompt
@@ -360,7 +374,7 @@ document.addEventListener('DOMContentLoaded', () => {
     claudeInput.value = '';
   }
   document.getElementById('claude-send').onclick = submitPrompt;
-  claudeInput.onkeydown = (e) => {
+  claudeInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       submitPrompt();
     } else if (e.key === 'ArrowUp') {
@@ -372,7 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const next = navigateHistory('down', claudeInput.value);
       if (next !== null) claudeInput.value = next;
     }
-  };
+  });
 
   // Quick actions
   document.querySelectorAll('.quick-action').forEach(btn => {
@@ -529,10 +543,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Accent color picker
   const accentBtn = document.getElementById('accent-btn');
   if (accentBtn) accentBtn.onclick = () => showAccentPicker(accentBtn);
-
-  // Keyboard shortcut overlay close button
-  const overlayClose = document.getElementById('shortcut-overlay-close');
-  if (overlayClose) overlayClose.onclick = closeShortcutOverlay;
 
   // Help button
   const helpBtn = document.getElementById('show-shortcuts');

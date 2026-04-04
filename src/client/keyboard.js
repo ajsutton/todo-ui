@@ -17,14 +17,14 @@ function isInInput() {
   const el = document.activeElement;
   if (!el) return false;
   const tag = el.tagName.toLowerCase();
-  return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable;
+  return ['input', 'textarea', 'select', 'sl-input', 'sl-textarea', 'sl-select'].includes(tag) || el.isContentEditable;
 }
 
 function isDialogOpen() {
   const dialogs = ['standup-dialog', 'log-dialog', 'update-dialog', 'shortcut-overlay'];
   return dialogs.some(id => {
     const el = document.getElementById(id);
-    return el && !el.classList.contains('hidden');
+    return el && el.open;
   });
 }
 
@@ -110,7 +110,7 @@ function toggleFocusMode() {
     if (claudePanel) claudePanel.style.display = 'none';
   } else {
     // Restore — remove p:0-1 from search
-    appState.searchQuery = appState.searchQuery.replace(/\s*p:0-1\s*/g, '').trim();
+    appState.searchQuery = appState.searchQuery.replace(/\s*p:0-1\s*$/g, '').replace(/\s*p:0-1\s*/g, ' ').trim();
     const input = document.getElementById('filter-search');
     if (input) input.value = appState.searchQuery;
     if (claudePanel) claudePanel.style.display = '';
@@ -121,17 +121,17 @@ function toggleFocusMode() {
 
 export function showShortcutOverlay() {
   const overlay = document.getElementById('shortcut-overlay');
-  if (overlay) overlay.classList.remove('hidden');
+  if (overlay) overlay.show();
 }
 
 export function closeShortcutOverlay() {
   const overlay = document.getElementById('shortcut-overlay');
-  if (overlay) overlay.classList.add('hidden');
+  if (overlay) overlay.hide();
 }
 
 function isShortcutOverlayOpen() {
   const overlay = document.getElementById('shortcut-overlay');
-  return overlay && !overlay.classList.contains('hidden');
+  return overlay && overlay.open;
 }
 
 export function initKeyboard() {
@@ -153,18 +153,18 @@ export function initKeyboard() {
         return;
       }
       const standupDialog = document.getElementById('standup-dialog');
-      if (!standupDialog.classList.contains('hidden')) {
-        standupDialog.classList.add('hidden');
+      if (standupDialog?.open) {
+        standupDialog.hide();
         return;
       }
       const logDialog = document.getElementById('log-dialog');
-      if (!logDialog.classList.contains('hidden')) {
-        logDialog.classList.add('hidden');
+      if (logDialog?.open) {
+        logDialog.hide();
         return;
       }
       const updateDialog = document.getElementById('update-dialog');
-      if (!updateDialog.classList.contains('hidden')) {
-        updateDialog.classList.add('hidden');
+      if (updateDialog?.open) {
+        updateDialog.hide();
         return;
       }
       const detailPanel = document.getElementById('detail-panel');
@@ -221,6 +221,7 @@ export function initKeyboard() {
       case '/':
         e.preventDefault();
         document.getElementById('filter-search')?.focus();
+        // sl-input needs focus() called on it
         break;
       case 'f':
         e.preventDefault();

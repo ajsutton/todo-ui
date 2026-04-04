@@ -129,10 +129,15 @@ function getSyntaxSuggestions(value) {
 }
 
 export function initSearchHistory(inputEl, onSelect) {
-  inputEl.addEventListener('focus', () => {
+  // Support both native input events and Shoelace sl-* events
+  const focusEvent = inputEl.tagName && inputEl.tagName.toLowerCase() === 'sl-input' ? 'sl-focus' : 'focus';
+  const inputEvent = inputEl.tagName && inputEl.tagName.toLowerCase() === 'sl-input' ? 'sl-input' : 'input';
+  const clearEvent = inputEl.tagName && inputEl.tagName.toLowerCase() === 'sl-input' ? 'sl-clear' : 'search';
+
+  inputEl.addEventListener(focusEvent, () => {
     if (!inputEl.value) showDropdown(inputEl, onSelect);
   });
-  inputEl.addEventListener('input', () => {
+  inputEl.addEventListener(inputEvent, () => {
     const val = inputEl.value;
     if (!val) {
       showDropdown(inputEl, onSelect);
@@ -147,7 +152,7 @@ export function initSearchHistory(inputEl, onSelect) {
     }
   });
   // Re-show on clear
-  inputEl.addEventListener('search', () => {
+  inputEl.addEventListener(clearEvent, () => {
     if (!inputEl.value) setTimeout(() => showDropdown(inputEl, onSelect), 50);
   });
 }

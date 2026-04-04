@@ -22,6 +22,27 @@
   --input-bg: #ffffff;
   --input-border: #d1d5db;
   --shadow: rgba(0, 0, 0, 0.1);
+
+  /* Shoelace design token overrides */
+  --sl-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", Arial, sans-serif;
+  --sl-font-size-small: 12px;
+  --sl-font-size-medium: 13px;
+  --sl-border-radius-small: 4px;
+  --sl-border-radius-medium: 6px;
+  --sl-border-radius-large: 8px;
+  --sl-border-radius-pill: 9999px;
+  /* Primary color = accent blue */
+  --sl-color-primary-50: #eff6ff;
+  --sl-color-primary-100: #dbeafe;
+  --sl-color-primary-200: #bfdbfe;
+  --sl-color-primary-300: #93c5fd;
+  --sl-color-primary-400: #60a5fa;
+  --sl-color-primary-500: #3b82f6;
+  --sl-color-primary-600: var(--accent);
+  --sl-color-primary-700: var(--accent-hover);
+  --sl-color-primary-800: #1e40af;
+  --sl-color-primary-900: #1e3a8a;
+  --sl-color-primary-950: #172554;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -48,6 +69,22 @@
     --input-border: #475569;
     --shadow: rgba(0, 0, 0, 0.3);
   }
+}
+
+/* Dark theme override for Shoelace (applied via data-theme="dark" or .sl-theme-dark) */
+[data-theme="dark"],
+.sl-theme-dark {
+  --sl-color-primary-50: #172554;
+  --sl-color-primary-100: #1e3a8a;
+  --sl-color-primary-200: #1e40af;
+  --sl-color-primary-300: #1d4ed8;
+  --sl-color-primary-400: #2563eb;
+  --sl-color-primary-500: #3b82f6;
+  --sl-color-primary-600: var(--accent);
+  --sl-color-primary-700: var(--accent-hover);
+  --sl-color-primary-800: #93c5fd;
+  --sl-color-primary-900: #bfdbfe;
+  --sl-color-primary-950: #dbeafe;
 }
 
 /* Reset and base */
@@ -3943,4 +3980,149 @@ tr:hover .reaction-add-btn:hover { opacity: 1; }
   color: var(--fg);
   line-height: 10px;
   z-index: 1;
+}
+
+/* ===== Shoelace component customizations ===== */
+
+/* sl-button: match app aesthetic */
+sl-button[size="small"]::part(base) {
+  font-size: 12px;
+  font-family: var(--sl-font-sans);
+}
+
+sl-button[variant="text"]::part(base) {
+  font-size: 1.1rem;
+  padding: 0 4px;
+}
+
+/* Quick filter chips active state */
+sl-button.qf-chip[variant="primary"]::part(base),
+sl-button.qf-chip.active::part(base) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* sl-select: compact appearance */
+sl-select[size="small"]::part(combobox) {
+  font-size: 12px;
+  min-height: 30px;
+}
+
+/* sl-input: match existing style */
+sl-input::part(base) {
+  background: var(--input-bg);
+  border-color: var(--input-border);
+  color: var(--fg);
+}
+
+sl-input::part(input) {
+  color: var(--fg);
+  font-family: var(--sl-font-sans);
+}
+
+/* sl-dialog: use app background */
+sl-dialog::part(panel) {
+  background: var(--panel-bg);
+  color: var(--fg);
+}
+
+sl-dialog::part(header) {
+  border-bottom: 1px solid var(--border);
+}
+
+sl-dialog::part(title) {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+sl-dialog::part(footer) {
+  border-top: 1px solid var(--border);
+}
+
+sl-dialog::part(body) {
+  padding: 0;
+}
+
+/* Update dialog content scrollable */
+#update-dialog-content {
+  padding: 12px 20px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* sl-tab-group inside standup dialog */
+sl-tab-group::part(base) {
+  display: flex;
+  flex-direction: column;
+}
+
+sl-tab-group::part(tabs) {
+  border-bottom: 1px solid var(--border);
+}
+
+sl-tab-panel::part(base) {
+  padding: 0;
+}
+
+/* Standup tab panel scrollable area */
+#standup-tab-report,
+#standup-tab-claude {
+  max-height: 55vh;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+/* sl-textarea: match app style */
+sl-textarea::part(base) {
+  background: var(--input-bg);
+  border-color: var(--input-border);
+}
+
+sl-textarea::part(textarea) {
+  color: var(--fg);
+  font-family: var(--sl-font-sans);
+}
+
+/* Dark mode overrides for Shoelace components */
+[data-theme="dark"] sl-button::part(base),
+.sl-theme-dark sl-button::part(base) {
+  color: var(--fg);
+}
+
+[data-theme="dark"] sl-input::part(base),
+.sl-theme-dark sl-input::part(base) {
+  background: var(--input-bg);
+  border-color: var(--input-border);
+}
+
+[data-theme="dark"] sl-select::part(combobox),
+.sl-theme-dark sl-select::part(combobox) {
+  background: var(--input-bg);
+  border-color: var(--input-border);
+  color: var(--fg);
+}
+
+[data-theme="dark"] sl-dialog::part(panel),
+.sl-theme-dark sl-dialog::part(panel) {
+  background: var(--panel-bg);
+  color: var(--fg);
+}
+
+[data-theme="dark"] sl-dialog::part(overlay),
+.sl-theme-dark sl-dialog::part(overlay) {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* Detail panel note textarea */
+.detail-note-textarea {
+  width: 100%;
+}
+
+/* Quick filter active state via CSS var trick */
+sl-button.qf-chip.active::part(base) {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-color: var(--accent);
+  color: var(--accent);
 }

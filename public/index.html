@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TODOs</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+  <link rel="stylesheet" href="/sl/themes/light.css">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -19,21 +20,21 @@
     </div>
     <div class="actions">
       <span id="last-update" class="last-update"></span>
-      <button id="focus-mode-btn" class="btn-small" title="Focus mode — hide distractions">Focus</button>
-      <button id="notif-toggle" class="btn-icon" title="Enable notifications" aria-label="Enable notifications">🔔</button>
-      <button id="theme-toggle" class="btn-icon" title="Toggle theme">🌙</button>
-      <button id="accent-btn" class="btn-icon accent-btn-swatch" title="Change accent color">🎨</button>
-      <button id="show-shortcuts" class="btn-icon" title="Keyboard shortcuts">?</button>
-      <button id="share-url" class="btn-small" title="Copy shareable URL for current view">Share</button>
-      <button id="export-md" class="btn-small" title="Copy visible items as Markdown">Export MD</button>
-      <button id="export-csv" class="btn-small" title="Download visible items as CSV">CSV ↓</button>
-      <button id="show-next" class="btn-small" title="Smart suggestion for next action">What's next?</button>
-      <button id="show-week" class="btn-small" title="Week view — items due this week (w)">Week</button>
-      <button id="show-digest" class="btn-small" title="Daily brief summary">Brief</button>
-      <button id="show-standup" class="btn-small">Standup</button>
+      <sl-button id="focus-mode-btn" size="small" title="Focus mode — hide distractions">Focus</sl-button>
+      <sl-button id="notif-toggle" variant="text" title="Enable notifications" aria-label="Enable notifications">🔔</sl-button>
+      <sl-button id="theme-toggle" variant="text" title="Toggle theme">🌙</sl-button>
+      <sl-button id="accent-btn" variant="text" class="accent-btn-swatch" title="Change accent color">🎨</sl-button>
+      <sl-button id="show-shortcuts" variant="text" title="Keyboard shortcuts">?</sl-button>
+      <sl-button id="share-url" size="small" title="Copy shareable URL for current view">Share</sl-button>
+      <sl-button id="export-md" size="small" title="Copy visible items as Markdown">Export MD</sl-button>
+      <sl-button id="export-csv" size="small" title="Download visible items as CSV">CSV ↓</sl-button>
+      <sl-button id="show-next" size="small" title="Smart suggestion for next action">What's next?</sl-button>
+      <sl-button id="show-week" size="small" title="Week view — items due this week (w)">Week</sl-button>
+      <sl-button id="show-digest" size="small" title="Daily brief summary">Brief</sl-button>
+      <sl-button id="show-standup" size="small">Standup</sl-button>
       <a id="show-log" href="#" title="Update log">View Log</a>
       <div class="update-action">
-        <button id="refresh-all" class="btn">Update All</button>
+        <sl-button id="refresh-all" variant="primary">Update All</sl-button>
         <div id="update-progress" class="update-progress hidden">
           <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
           <span id="progress-label" class="progress-label"></span>
@@ -43,24 +44,24 @@
   </header>
 
   <div class="filters">
-    <select id="filter-type">
-      <option value="">All Types</option>
-      <option value="Review">Review</option>
-      <option value="PR">PR</option>
-      <option value="Workstream">Workstream</option>
-      <option value="Issue">Issue</option>
-    </select>
-    <select id="filter-status">
-      <option value="">All Statuses</option>
-      <option value="active" selected>Active</option>
-      <option value="done">Done</option>
-    </select>
-    <input type="search" id="filter-search" placeholder="Search… p:0 type:pr tag:name" autocomplete="off" title="Search: p:0, p:0-2, type:pr, status:failing, blocked, overdue, tag:name, or text">
-    <button id="recent-btn" class="btn-small" title="Recently viewed items">Recent</button>
-    <button id="save-preset-btn" class="btn-small" title="Save current filter as preset">⭐ Save filter</button>
-    <button id="bulk-mode-toggle" class="btn-small" title="Select multiple items">Select</button>
-    <button id="groupby-toggle" class="btn-small" title="Group items by priority">Group</button>
-    <button id="columns-btn" class="btn-small" title="Show/hide columns">Columns</button>
+    <sl-select id="filter-type" placeholder="All Types" size="small" clearable>
+      <sl-option value="">All Types</sl-option>
+      <sl-option value="Review">Review</sl-option>
+      <sl-option value="PR">PR</sl-option>
+      <sl-option value="Workstream">Workstream</sl-option>
+      <sl-option value="Issue">Issue</sl-option>
+    </sl-select>
+    <sl-select id="filter-status" value="active" size="small">
+      <sl-option value="">All Statuses</sl-option>
+      <sl-option value="active">Active</sl-option>
+      <sl-option value="done">Done</sl-option>
+    </sl-select>
+    <sl-input type="search" id="filter-search" placeholder="Search… p:0 type:pr tag:name" autocomplete="off" title="Search: p:0, p:0-2, type:pr, status:failing, blocked, overdue, tag:name, or text" size="small" clearable style="margin-left:auto;width:260px"></sl-input>
+    <sl-button id="recent-btn" size="small" title="Recently viewed items">Recent</sl-button>
+    <sl-button id="save-preset-btn" size="small" title="Save current filter as preset">⭐ Save filter</sl-button>
+    <sl-button id="bulk-mode-toggle" size="small" title="Select multiple items">Select</sl-button>
+    <sl-button id="groupby-toggle" size="small" title="Group items by priority">Group</sl-button>
+    <sl-button id="columns-btn" size="small" title="Show/hide columns">Columns</sl-button>
     <div class="density-group" title="Row density">
       <button class="density-btn" data-density="compact" title="Compact">▤</button>
       <button class="density-btn active" data-density="normal" title="Normal">▦</button>
@@ -69,15 +70,15 @@
   </div>
 
   <div id="quick-filters" class="quick-filters" role="toolbar" aria-label="Quick filters">
-    <button class="qf-chip" data-query="p:0" title="Show only P0 items">P0</button>
-    <button class="qf-chip" data-query="p:0-1" title="Show P0 and P1 items">P0–P1</button>
-    <button class="qf-chip" data-query="overdue" title="Show overdue items">Overdue</button>
-    <button class="qf-chip" data-query="blocked" title="Show blocked items">Blocked</button>
-    <button class="qf-chip" data-query="type:review" title="Show Review items">Reviews</button>
-    <button class="qf-chip" data-query="type:pr" title="Show PR items">PRs</button>
-    <button class="qf-chip" data-query="status:failing" title="Show items with failing CI">CI Failing</button>
-    <button class="qf-chip" data-query="due:today" title="Show items due today">Due Today</button>
-    <button class="qf-chip" data-query="due:week" title="Show items due within 7 days">Due This Week</button>
+    <sl-button class="qf-chip" size="small" pill data-query="p:0" title="Show only P0 items">P0</sl-button>
+    <sl-button class="qf-chip" size="small" pill data-query="p:0-1" title="Show P0 and P1 items">P0–P1</sl-button>
+    <sl-button class="qf-chip" size="small" pill data-query="overdue" title="Show overdue items">Overdue</sl-button>
+    <sl-button class="qf-chip" size="small" pill data-query="blocked" title="Show blocked items">Blocked</sl-button>
+    <sl-button class="qf-chip" size="small" pill data-query="type:review" title="Show Review items">Reviews</sl-button>
+    <sl-button class="qf-chip" size="small" pill data-query="type:pr" title="Show PR items">PRs</sl-button>
+    <sl-button class="qf-chip" size="small" pill data-query="status:failing" title="Show items with failing CI">CI Failing</sl-button>
+    <sl-button class="qf-chip" size="small" pill data-query="due:today" title="Show items due today">Due Today</sl-button>
+    <sl-button class="qf-chip" size="small" pill data-query="due:week" title="Show items due within 7 days">Due This Week</sl-button>
   </div>
 
   <div id="stats-bar" class="stats-bar"></div>
@@ -85,20 +86,20 @@
   <div id="bulk-toolbar" class="bulk-toolbar hidden">
     <span class="bulk-count"></span>
     <div class="bulk-actions">
-      <button data-bulk-action="done" class="btn-small" disabled>Mark Done</button>
-      <button data-bulk-action="active" class="btn-small" disabled>Mark Active</button>
+      <sl-button data-bulk-action="done" size="small" disabled>Mark Done</sl-button>
+      <sl-button data-bulk-action="active" size="small" disabled>Mark Active</sl-button>
       <div class="bulk-priority-group">
         <span class="bulk-label">Set priority:</span>
-        <button data-bulk-action="priority" data-priority="P0" class="btn-small priority-p0" disabled>P0</button>
-        <button data-bulk-action="priority" data-priority="P1" class="btn-small priority-p1" disabled>P1</button>
-        <button data-bulk-action="priority" data-priority="P2" class="btn-small priority-p2" disabled>P2</button>
-        <button data-bulk-action="priority" data-priority="P3" class="btn-small priority-p3" disabled>P3</button>
+        <sl-button data-bulk-action="priority" data-priority="P0" size="small" class="priority-p0" disabled>P0</sl-button>
+        <sl-button data-bulk-action="priority" data-priority="P1" size="small" class="priority-p1" disabled>P1</sl-button>
+        <sl-button data-bulk-action="priority" data-priority="P2" size="small" class="priority-p2" disabled>P2</sl-button>
+        <sl-button data-bulk-action="priority" data-priority="P3" size="small" class="priority-p3" disabled>P3</sl-button>
       </div>
-      <button data-bulk-action="clear" class="btn-small">Clear</button>
-      <button data-bulk-action="tag" class="btn-small" disabled>🏷 Tag…</button>
-      <button data-bulk-action="due" class="btn-small" disabled>📅 Due…</button>
+      <sl-button data-bulk-action="clear" size="small">Clear</sl-button>
+      <sl-button data-bulk-action="tag" size="small" disabled>🏷 Tag…</sl-button>
+      <sl-button data-bulk-action="due" size="small" disabled>📅 Due…</sl-button>
     </div>
-    <button id="bulk-mode-exit" class="btn-small btn-secondary">Exit</button>
+    <sl-button id="bulk-mode-exit" size="small" variant="default">Exit</sl-button>
   </div>
 
   <table id="todo-table">
@@ -123,130 +124,102 @@
         <span id="detail-id" class="detail-id"></span>
       </div>
       <div class="detail-header-actions">
-        <button id="detail-note" class="btn-small hidden" title="Append a quick note">+ Note</button>
-        <button id="detail-edit" class="btn-small hidden">Edit</button>
-        <button id="detail-save" class="btn-small hidden">Save</button>
-        <button id="detail-cancel" class="btn-small btn-secondary hidden">Cancel</button>
-        <button id="detail-close" class="btn-icon">&times;</button>
+        <sl-button id="detail-note" size="small" class="hidden" title="Append a quick note">+ Note</sl-button>
+        <sl-button id="detail-edit" size="small" class="hidden">Edit</sl-button>
+        <sl-button id="detail-save" size="small" class="hidden">Save</sl-button>
+        <sl-button id="detail-cancel" size="small" variant="default" class="hidden">Cancel</sl-button>
+        <sl-button id="detail-close" variant="text" style="font-size:1.4rem;line-height:1">&times;</sl-button>
       </div>
     </div>
     <div id="detail-content"></div>
     <div id="detail-note-form" class="detail-note-form hidden">
-      <textarea id="detail-note-text" class="detail-note-textarea" placeholder="Add a note (Ctrl+Enter to save, Esc to cancel)…" rows="3"></textarea>
+      <sl-textarea id="detail-note-text" class="detail-note-textarea" placeholder="Add a note (Ctrl+Enter to save, Esc to cancel)…" rows="3"></sl-textarea>
       <div class="detail-note-actions">
-        <button id="detail-note-save" class="btn-small">Append note</button>
-        <button id="detail-note-cancel" class="btn-small btn-secondary">Cancel</button>
+        <sl-button id="detail-note-save" size="small">Append note</sl-button>
+        <sl-button id="detail-note-cancel" size="small" variant="default">Cancel</sl-button>
       </div>
     </div>
   </div>
 
-  <div id="update-dialog" class="dialog-overlay hidden">
-    <div class="dialog">
-      <div class="dialog-header">
-        <h2 id="update-dialog-title">Update Results</h2>
-        <button id="update-dialog-close" class="btn-icon">&times;</button>
-      </div>
-      <div id="update-dialog-content"></div>
-      <div id="update-dialog-actions" class="dialog-actions hidden">
-        <label class="select-all-label">
-          <input type="checkbox" id="discovery-select-all" checked> Select all
-        </label>
-        <div class="dialog-buttons">
-          <button id="discovery-skip" class="btn-small">Skip</button>
-          <button id="discovery-add" class="btn">Add Selected</button>
-        </div>
+  <sl-dialog id="update-dialog" label="Update Results">
+    <div id="update-dialog-content"></div>
+    <div id="update-dialog-actions" class="dialog-actions hidden">
+      <label class="select-all-label">
+        <input type="checkbox" id="discovery-select-all" checked> Select all
+      </label>
+      <div class="dialog-buttons">
+        <sl-button id="discovery-skip" size="small">Skip</sl-button>
+        <sl-button id="discovery-add" variant="primary">Add Selected</sl-button>
       </div>
     </div>
-  </div>
+  </sl-dialog>
 
   <div id="claude-panel" class="claude-panel">
     <div class="claude-input-row">
-      <input type="text" id="claude-prompt" placeholder="Ask Claude..." />
-      <button id="claude-send" class="btn">Send</button>
+      <sl-input id="claude-prompt" placeholder="Ask Claude..." style="flex:1"></sl-input>
+      <sl-button id="claude-send" variant="primary">Send</sl-button>
     </div>
     <div id="claude-spinner" class="claude-spinner hidden"><span class="spinner"></span> Thinking...</div>
     <pre id="claude-output" class="hidden"></pre>
   </div>
 
-  <div id="log-dialog" class="dialog-overlay hidden">
-    <div class="dialog dialog-wide">
-      <div class="dialog-header">
-        <h2>Update Log</h2>
-        <button id="log-dialog-close" class="btn-icon">&times;</button>
-      </div>
-      <div id="log-dialog-content" class="log-content"></div>
-      <div class="dialog-actions">
-        <div class="dialog-buttons">
-          <button id="log-load-more" class="btn-small hidden">Load more</button>
-          <button id="log-close-btn" class="btn-small">Close</button>
-        </div>
-      </div>
+  <sl-dialog id="log-dialog" label="Update Log" style="--width:700px">
+    <div id="log-dialog-content" class="log-content"></div>
+    <div slot="footer" class="dialog-buttons">
+      <sl-button id="log-load-more" size="small" class="hidden">Load more</sl-button>
+      <sl-button id="log-close-btn" size="small">Close</sl-button>
     </div>
-  </div>
+  </sl-dialog>
 
-  <div id="standup-dialog" class="dialog-overlay hidden">
-    <div class="dialog dialog-wide">
-      <div class="dialog-header">
-        <h2>Daily Standup</h2>
-        <button id="standup-dialog-close" class="btn-icon">&times;</button>
-      </div>
-      <div class="tab-bar">
-        <button class="tab-btn" data-tab="report">Report</button>
-        <button class="tab-btn active" data-tab="claude">Claude</button>
-      </div>
-      <div id="standup-tab-report" class="tab-content standup-content hidden"></div>
-      <div id="standup-tab-claude" class="tab-content standup-content">
+  <sl-dialog id="standup-dialog" label="Daily Standup" style="--width:700px">
+    <sl-tab-group id="standup-tab-group">
+      <sl-tab slot="nav" panel="report">Report</sl-tab>
+      <sl-tab slot="nav" panel="claude" active>Claude</sl-tab>
+      <sl-tab-panel name="report" id="standup-tab-report" class="standup-content"></sl-tab-panel>
+      <sl-tab-panel name="claude" id="standup-tab-claude" class="standup-content">
         <div class="standup-claude-actions">
-          <button id="standup-claude-generate" class="btn btn-small hidden">Regenerate</button>
+          <sl-button id="standup-claude-generate" size="small" class="hidden">Regenerate</sl-button>
           <div id="standup-claude-spinner" class="claude-spinner hidden"><span class="spinner"></span> <span id="standup-claude-spinner-label">Thinking...</span></div>
           <span id="standup-claude-generated-at" class="standup-generated-at hidden"></span>
         </div>
         <pre id="standup-claude-output" class="standup-claude-output hidden"></pre>
         <div id="standup-claude-rendered" class="standup-claude-rendered hidden"></div>
-      </div>
-      <div class="dialog-actions">
-        <div class="dialog-buttons">
-          <button id="standup-copy-btn" class="btn-small">Copy</button>
-          <button id="standup-close-btn" class="btn-small">Close</button>
-        </div>
-      </div>
+      </sl-tab-panel>
+    </sl-tab-group>
+    <div slot="footer" class="dialog-buttons">
+      <sl-button id="standup-copy-btn" size="small">Copy</sl-button>
+      <sl-button id="standup-close-btn" size="small">Close</sl-button>
     </div>
-  </div>
+  </sl-dialog>
 
-  <div id="shortcut-overlay" class="dialog-overlay hidden">
-    <div class="dialog">
-      <div class="dialog-header">
-        <h2>Keyboard Shortcuts</h2>
-        <button id="shortcut-overlay-close" class="btn-icon">&times;</button>
-      </div>
-      <table class="shortcut-table">
-        <tbody>
-          <tr><td><kbd class="shortcut-key">j</kbd> / <kbd class="shortcut-key">↓</kbd></td><td>Select next row</td></tr>
-          <tr><td><kbd class="shortcut-key">k</kbd> / <kbd class="shortcut-key">↑</kbd></td><td>Select previous row</td></tr>
-          <tr><td><kbd class="shortcut-key">Enter</kbd> / <kbd class="shortcut-key">o</kbd></td><td>Open detail panel</td></tr>
-          <tr><td><kbd class="shortcut-key">d</kbd></td><td>Mark selected done/undone</td></tr>
-          <tr><td><kbd class="shortcut-key">p</kbd></td><td>Set priority on selected row</td></tr>
-          <tr><td><kbd class="shortcut-key">s</kbd></td><td>Snooze / unsnooze selected row (until tomorrow)</td></tr>
-          <tr><td><kbd class="shortcut-key">u</kbd></td><td>Set due date on selected row</td></tr>
-          <tr><td><kbd class="shortcut-key">Shift+N</kbd></td><td>Add/edit personal note on selected row</td></tr>
-          <tr><td><kbd class="shortcut-key">t</kbd></td><td>Set type on selected row</td></tr>
-          <tr><td><kbd class="shortcut-key">Ctrl+Z</kbd></td><td>Undo last reversible action</td></tr>
-          <tr><td><kbd class="shortcut-key">+</kbd> / <kbd class="shortcut-key">-</kbd></td><td>Bump due date forward/back one day</td></tr>
-          <tr><td><kbd class="shortcut-key">e</kbd></td><td>Edit detail panel</td></tr>
-          <tr><td><kbd class="shortcut-key">g</kbd></td><td>Open GitHub link</td></tr>
-          <tr><td><kbd class="shortcut-key">r</kbd></td><td>Refresh PR status</td></tr>
-          <tr><td><kbd class="shortcut-key">/</kbd></td><td>Focus search</td></tr>
-          <tr><td><kbd class="shortcut-key">n</kbd></td><td>Add new item</td></tr>
-          <tr><td><kbd class="shortcut-key">c</kbd></td><td>Copy item ID to clipboard</td></tr>
-          <tr><td><kbd class="shortcut-key">w</kbd></td><td>Week view (due dates this week)</td></tr>
-          <tr><td><kbd class="shortcut-key">f</kbd></td><td>Toggle focus mode (P0/P1 only)</td></tr>
-          <tr><td><kbd class="shortcut-key">?</kbd></td><td>Show/hide this overlay</td></tr>
-          <tr><td><kbd class="shortcut-key">⌘K</kbd> / <kbd class="shortcut-key">Ctrl+K</kbd></td><td>Open command palette</td></tr>
-          <tr><td><kbd class="shortcut-key">Esc</kbd></td><td>Close overlay/dialog/panel</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
+  <sl-dialog id="shortcut-overlay" label="Keyboard Shortcuts">
+    <table class="shortcut-table">
+      <tbody>
+        <tr><td><kbd class="shortcut-key">j</kbd> / <kbd class="shortcut-key">↓</kbd></td><td>Select next row</td></tr>
+        <tr><td><kbd class="shortcut-key">k</kbd> / <kbd class="shortcut-key">↑</kbd></td><td>Select previous row</td></tr>
+        <tr><td><kbd class="shortcut-key">Enter</kbd> / <kbd class="shortcut-key">o</kbd></td><td>Open detail panel</td></tr>
+        <tr><td><kbd class="shortcut-key">d</kbd></td><td>Mark selected done/undone</td></tr>
+        <tr><td><kbd class="shortcut-key">p</kbd></td><td>Set priority on selected row</td></tr>
+        <tr><td><kbd class="shortcut-key">s</kbd></td><td>Snooze / unsnooze selected row (until tomorrow)</td></tr>
+        <tr><td><kbd class="shortcut-key">u</kbd></td><td>Set due date on selected row</td></tr>
+        <tr><td><kbd class="shortcut-key">Shift+N</kbd></td><td>Add/edit personal note on selected row</td></tr>
+        <tr><td><kbd class="shortcut-key">t</kbd></td><td>Set type on selected row</td></tr>
+        <tr><td><kbd class="shortcut-key">Ctrl+Z</kbd></td><td>Undo last reversible action</td></tr>
+        <tr><td><kbd class="shortcut-key">+</kbd> / <kbd class="shortcut-key">-</kbd></td><td>Bump due date forward/back one day</td></tr>
+        <tr><td><kbd class="shortcut-key">e</kbd></td><td>Edit detail panel</td></tr>
+        <tr><td><kbd class="shortcut-key">g</kbd></td><td>Open GitHub link</td></tr>
+        <tr><td><kbd class="shortcut-key">r</kbd></td><td>Refresh PR status</td></tr>
+        <tr><td><kbd class="shortcut-key">/</kbd></td><td>Focus search</td></tr>
+        <tr><td><kbd class="shortcut-key">n</kbd></td><td>Add new item</td></tr>
+        <tr><td><kbd class="shortcut-key">c</kbd></td><td>Copy item ID to clipboard</td></tr>
+        <tr><td><kbd class="shortcut-key">w</kbd></td><td>Week view (due dates this week)</td></tr>
+        <tr><td><kbd class="shortcut-key">f</kbd></td><td>Toggle focus mode (P0/P1 only)</td></tr>
+        <tr><td><kbd class="shortcut-key">?</kbd></td><td>Show/hide this overlay</td></tr>
+        <tr><td><kbd class="shortcut-key">⌘K</kbd> / <kbd class="shortcut-key">Ctrl+K</kbd></td><td>Open command palette</td></tr>
+        <tr><td><kbd class="shortcut-key">Esc</kbd></td><td>Close overlay/dialog/panel</td></tr>
+      </tbody>
+    </table>
+  </sl-dialog>
 
   <script src="/app.js"></script>
 </body>

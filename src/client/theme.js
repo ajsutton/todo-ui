@@ -95,10 +95,15 @@ export function showAccentPicker(anchorEl) {
   }, 0);
 }
 
+function syncShoelaceTheme() {
+  document.documentElement.classList.toggle('sl-theme-dark', isDarkMode());
+}
+
 export function initTheme() {
   const saved = localStorage.getItem(THEME_KEY);
   if (saved) document.documentElement.dataset.theme = saved;
   updateThemeButton();
+  syncShoelaceTheme();
 }
 
 export function toggleTheme() {
@@ -128,11 +133,13 @@ export function toggleTheme() {
       document.documentElement.dataset.theme = next;
       localStorage.setItem(THEME_KEY, next);
       updateThemeButton();
+      syncShoelaceTheme();
     });
   } else {
     document.documentElement.dataset.theme = next;
     localStorage.setItem(THEME_KEY, next);
     updateThemeButton();
+    syncShoelaceTheme();
   }
 }
 

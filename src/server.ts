@@ -276,6 +276,21 @@ const server = Bun.serve({
         headers: { "Content-Type": "application/javascript; charset=utf-8" },
       });
     }
+    // Serve Shoelace assets (CSS themes, icons, etc.) from node_modules
+    if (pathname.startsWith("/sl/")) {
+      const relPath = pathname.slice(4);
+      const shoelaceBase = path.resolve(path.join(import.meta.dir, "../node_modules/@shoelace-style/shoelace/dist"));
+      const assetPath = path.resolve(path.join(shoelaceBase, relPath));
+      if (assetPath.startsWith(shoelaceBase) && existsSync(assetPath)) {
+        const ext = path.extname(assetPath);
+        const mimeType =
+          ext === ".css" ? "text/css" :
+          ext === ".svg" ? "image/svg+xml" :
+          ext === ".js" ? "application/javascript" :
+          "application/octet-stream";
+        return new Response(Bun.file(assetPath), { headers: { "Content-Type": mimeType } });
+      }
+    }
 
     // API routes
     if (req.method === "GET" && pathname === "/api/state") {
