@@ -23,6 +23,7 @@ import { initSearchHistory, recordSearch, hideDropdown } from './searchhistory.j
 import { initNewItem } from './newitem.js';
 import { showWeekView } from './weekview.js';
 import { showDigest } from './digest.js';
+import { showRecentsPopover } from './recents.js';
 
 function showUpdateDialog(results, discovered, errors) {
   errors = errors || [];
@@ -417,6 +418,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Daily brief digest
   document.getElementById('show-digest')?.addEventListener('click', showDigest);
+
+  // Recent items button
+  const recentBtn = document.getElementById('recent-btn');
+  if (recentBtn) {
+    recentBtn.addEventListener('click', () => {
+      showRecentsPopover(recentBtn, (id) => showDetail(id));
+    });
+  }
 
   // Saved filter presets
   renderPresetsBar();

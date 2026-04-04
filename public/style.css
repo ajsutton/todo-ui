@@ -2353,6 +2353,49 @@ tbody tr {
 }
 .digest-stats { font-size: 11px; color: var(--muted); }
 
+/* Recently viewed popover */
+.recents-popover {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px var(--shadow);
+  z-index: 800;
+  overflow: hidden;
+  min-width: 220px;
+  animation: fade-in 0.1s ease;
+}
+.recents-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.recents-clear {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+.recents-clear:hover { color: var(--fg); background: var(--bg-secondary); }
+.recents-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.08s;
+}
+.recents-item:hover { background: var(--table-hover); }
+.recents-pri { font-size: 10px; font-weight: 700; flex-shrink: 0; width: 20px; }
+.recents-desc { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+
 /* Row refresh flash */
 @keyframes row-refresh-flash {
   0%, 100% { background: transparent; }
