@@ -2867,3 +2867,31 @@ body.has-p0::before {
   line-height: 1;
   z-index: 1;
 }
+
+/* Date picker shortcuts */
+.date-picker-shortcuts {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.date-shortcut-btn {
+  font-size: 11px !important;
+  padding: 2px 7px !important;
+  background: var(--bg-secondary) !important;
+  color: var(--fg-secondary) !important;
+  border-color: var(--border) !important;
+}
+
+.date-shortcut-btn:hover {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg)) !important;
+  color: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+
+.date-picker-input-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
