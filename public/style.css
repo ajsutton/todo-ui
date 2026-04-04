@@ -3343,6 +3343,97 @@ mark.search-highlight {
 .ne-clear { color: var(--muted); }
 .ne-clear:hover { color: var(--fg); }
 
+/* Tag cloud panel */
+.tag-cloud-panel {
+  position: fixed;
+  right: 16px;
+  bottom: 80px; /* above goal widget */
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px var(--shadow);
+  padding: 12px 14px;
+  width: 260px;
+  max-height: 340px;
+  overflow-y: auto;
+  z-index: 200;
+  font-size: 13px;
+}
+
+.tc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.tc-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tc-clear-filter {
+  font-size: 11px;
+  padding: 1px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.tc-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px;
+}
+.tc-close:hover { color: var(--fg); }
+
+.tc-cloud {
+  line-height: 1.9;
+  word-spacing: 4px;
+}
+
+.tc-tag {
+  display: inline-block;
+  cursor: pointer;
+  color: var(--accent);
+  transition: opacity 0.15s, transform 0.1s;
+  font-weight: 500;
+}
+.tc-tag:hover { opacity: 0.7; transform: scale(1.06); }
+.tc-tag.tc-active {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.tc-count {
+  font-size: 9px;
+  color: var(--muted);
+  margin-left: 1px;
+}
+
+.tc-footer {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.tc-empty {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 8px 0;
+}
+
 /* Type picker popup */
 .type-picker {
   position: fixed;
