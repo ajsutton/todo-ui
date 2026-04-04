@@ -416,13 +416,16 @@ const server = Bun.serve({
               data: { requestId, status: "running", output: "" },
             });
 
+            // Buffer text per turn — tool_use means intermediate text, reset it.
+            // Only send the final turn's text (after all tool calls complete).
+            let currentTurnText = "";
+
             for await (const chunk of runClaudePrompt(CLAUDE_CWD, prompt)) {
               if (chunk.kind === "text") {
-                broadcast({
-                  type: "standup-status",
-                  data: { requestId, status: "running", output: chunk.text },
-                });
+                currentTurnText += chunk.text;
               } else if (chunk.kind === "activity") {
+                // New tool use means current text was intermediate — discard it
+                currentTurnText = "";
                 broadcast({
                   type: "standup-status",
                   data: { requestId, status: "running", output: "", activity: chunk.tool },
@@ -432,7 +435,7 @@ const server = Bun.serve({
 
             broadcast({
               type: "standup-status",
-              data: { requestId, status: "done", output: "" },
+              data: { requestId, status: "done", output: currentTurnText },
             });
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);

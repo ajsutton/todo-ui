@@ -1264,10 +1264,15 @@ function closeLogDialog() {
 // Standup dialog
 let activeStandupTab = 'report';
 let currentStandupReport = null;
+let standupReportLoaded = false;
+let standupClaudeLoaded = false;
 
 async function showStandupDialog() {
   const dialog = document.getElementById('standup-dialog');
-  // Reset Claude tab state
+  // Reset both tabs so they regenerate on next switch
+  standupReportLoaded = false;
+  standupClaudeLoaded = false;
+  currentStandupReport = null;
   standupClaudeRawOutput = '';
   document.getElementById('standup-claude-output').textContent = '';
   document.getElementById('standup-claude-output').classList.add('hidden');
@@ -1276,7 +1281,6 @@ async function showStandupDialog() {
   document.getElementById('standup-claude-rendered').classList.add('hidden');
   dialog.classList.remove('hidden');
   switchStandupTab('report');
-  await loadStandupReport();
 }
 
 function closeStandupDialog() {
@@ -1290,6 +1294,14 @@ function switchStandupTab(tab) {
   });
   document.getElementById('standup-tab-report').classList.toggle('hidden', tab !== 'report');
   document.getElementById('standup-tab-claude').classList.toggle('hidden', tab !== 'claude');
+
+  if (tab === 'report' && !standupReportLoaded) {
+    standupReportLoaded = true;
+    loadStandupReport();
+  } else if (tab === 'claude' && !standupClaudeLoaded) {
+    standupClaudeLoaded = true;
+    generateStandupWithClaude();
+  }
 }
 
 async function loadStandupReport() {
@@ -1802,6 +1814,7 @@ async function generateStandupWithClaude() {
   rendered.classList.add('hidden');
   rendered.innerHTML = '';
   spinner.classList.remove('hidden');
+  btn.classList.add('hidden');
   btn.disabled = true;
 
   try {
@@ -1811,6 +1824,7 @@ async function generateStandupWithClaude() {
       output.classList.add('claude-error');
       output.textContent = 'Error: ' + (await res.text());
       btn.disabled = false;
+      btn.classList.remove('hidden');
     }
     // Output streams via WebSocket standup-status messages
   } catch (err) {
@@ -1818,6 +1832,7 @@ async function generateStandupWithClaude() {
     output.classList.add('claude-error');
     output.textContent = 'Error: ' + err.message;
     btn.disabled = false;
+    btn.classList.remove('hidden');
   }
 }
 
@@ -1833,15 +1848,11 @@ function handleStandupStatus(data) {
       const label = TOOL_LABELS[data.activity] || ('Using ' + data.activity);
       spinnerLabel.textContent = label + '...';
     }
-    if (data.output) {
-      standupClaudeRawOutput += data.output;
-      output.textContent = standupClaudeRawOutput;
-      output.scrollTop = output.scrollHeight;
-    }
   } else if (data.status === 'done') {
     spinner.classList.add('hidden');
     btn.disabled = false;
-    // Switch from raw pre to rendered markdown
+    btn.classList.remove('hidden');
+    standupClaudeRawOutput = data.output || '';
     if (standupClaudeRawOutput.trim()) {
       rendered.innerHTML = renderSimpleMarkdown(standupClaudeRawOutput);
       rendered.classList.remove('hidden');
@@ -1852,6 +1863,7 @@ function handleStandupStatus(data) {
     output.classList.add('claude-error');
     output.textContent += (output.textContent ? '\n' : '') + 'Error: ' + data.output;
     btn.disabled = false;
+    btn.classList.remove('hidden');
   }
 }
 
