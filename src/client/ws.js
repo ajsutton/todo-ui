@@ -6,6 +6,7 @@ import { refreshOpenDetail } from './detail.js';
 import { handleClaudeStatus } from './claude.js';
 import { handleStandupStatus, displayStandupClaudeReport } from './standup.js';
 import { updateSessionStats } from './session.js';
+import { initChangelogSnapshot, diffSinceLastVisit, showChangelogBanner, updateLatestItems } from './changelog.js';
 
 function handleUpdateProgress(data) {
   const progress = document.getElementById('update-progress');
@@ -72,7 +73,14 @@ export function connectWebSocket() {
       appState.items = msg.data.items;
       appState.rawMarkdown = msg.data.rawMarkdown;
       appState.lastModified = msg.data.lastModified;
+      if (!appState.dataLoaded) {
+        // First load: diff against last-visit snapshot before overwriting it
+        const diff = diffSinceLastVisit(appState.items);
+        showChangelogBanner(diff);
+        initChangelogSnapshot(appState.items);
+      }
       appState.dataLoaded = true;
+      updateLatestItems(appState.items);
       refreshStale();
       checkForNotifiableChanges(appState.items);
       updateSessionStats(appState.items);
