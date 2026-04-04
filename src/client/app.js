@@ -13,6 +13,7 @@ import { initTheme, toggleTheme } from './theme.js';
 import { requestNotificationPermission, canNotify } from './notifications.js';
 import { toggleBulkMode, bulkMarkDone, bulkMarkActive, bulkSetPriority, clearSelection, renderBulkToolbar } from './bulk.js';
 import { showSuggestionBanner } from './suggestion.js';
+import { copyExport } from './export.js';
 
 function showUpdateDialog(results, discovered, errors) {
   errors = errors || [];
@@ -312,6 +313,17 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.density-btn').forEach(b => b.classList.toggle('active', b.dataset.density === d));
     });
   });
+
+  // Export as Markdown
+  const exportBtn = document.getElementById('export-md');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', async () => {
+      await copyExport();
+      const orig = exportBtn.textContent;
+      exportBtn.textContent = 'Copied!';
+      setTimeout(() => { exportBtn.textContent = orig; }, 1500);
+    });
+  }
 
   // "What's next?" suggestion
   document.getElementById('show-next')?.addEventListener('click', showSuggestionBanner);
