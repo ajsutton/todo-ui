@@ -21,18 +21,44 @@ function handleUpdateProgress(data) {
   }
 }
 
+let reconnectCountdownInterval = null;
+
+function setConnectionStatus(state, label) {
+  const el = document.getElementById('connection-status');
+  const labelEl = document.getElementById('connection-label');
+  if (el) el.className = 'status-indicator ' + state;
+  if (labelEl) labelEl.textContent = label || '';
+}
+
+function startReconnectCountdown(delayMs) {
+  clearInterval(reconnectCountdownInterval);
+  let remaining = Math.ceil(delayMs / 1000);
+  setConnectionStatus('disconnected', `Reconnecting in ${remaining}s`);
+  reconnectCountdownInterval = setInterval(() => {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(reconnectCountdownInterval);
+      setConnectionStatus('disconnected', 'Reconnecting…');
+    } else {
+      setConnectionStatus('disconnected', `Reconnecting in ${remaining}s`);
+    }
+  }, 1000);
+}
+
 export function connectWebSocket() {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   appState.ws = new WebSocket(`${protocol}//${location.host}/ws`);
 
   appState.ws.onopen = () => {
-    document.getElementById('connection-status').className = 'status-indicator connected';
+    clearInterval(reconnectCountdownInterval);
+    setConnectionStatus('connected', '');
     appState.reconnectAttempts = 0;
   };
 
   appState.ws.onclose = () => {
-    document.getElementById('connection-status').className = 'status-indicator disconnected';
-    setTimeout(connectWebSocket, Math.min(1000 * Math.pow(2, appState.reconnectAttempts++), 30000));
+    const delay = Math.min(1000 * Math.pow(2, appState.reconnectAttempts++), 30000);
+    startReconnectCountdown(delay);
+    setTimeout(connectWebSocket, delay);
   };
 
   appState.ws.onerror = () => {}; // onclose fires after onerror

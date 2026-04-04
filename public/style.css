@@ -1790,3 +1790,15 @@ tbody tr {
 .quickadd-p1 { color: var(--p1); border-color: var(--p1); }
 .quickadd-p2 { color: var(--p2); border-color: var(--p2); }
 .quickadd-p3 { color: var(--p3); border-color: var(--p3); }
+
+/* Connection label next to status dot */
+.connection-label {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  transition: opacity 0.3s;
+}
+
+.status-indicator.disconnected ~ .connection-label {
+  color: var(--status-fail);
+}
