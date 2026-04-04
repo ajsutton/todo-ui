@@ -43,6 +43,7 @@ export function buildStatusString(ghStatus: GhPrStatus): string {
 
 // Cell indices when splitting on "|" (index 0 is empty before first |)
 const CELL_DESCRIPTION = 2;
+const CELL_TYPE = 3;
 const CELL_STATUS = 4;
 const CELL_PRIORITY = 5;
 const CELL_DUE = 6;
@@ -126,6 +127,19 @@ export function setPriority(todoDir: string, id: string, priority: string): void
   const filePath = path.join(todoDir, "TODO.md");
   const content = readFileSync(filePath, "utf-8");
   const updated = replaceCells(content, id, new Map([[CELL_PRIORITY, priority]]));
+  atomicWrite(filePath, updated);
+}
+
+const VALID_TYPES = ["PR", "Review", "Issue", "Workstream"];
+
+export function setType(todoDir: string, id: string, type: string): void {
+  const trimmed = type.trim();
+  if (!VALID_TYPES.includes(trimmed)) {
+    throw new Error(`Invalid type "${trimmed}". Must be one of: ${VALID_TYPES.join(", ")}`);
+  }
+  const filePath = path.join(todoDir, "TODO.md");
+  const content = readFileSync(filePath, "utf-8");
+  const updated = replaceCells(content, id, new Map([[CELL_TYPE, trimmed]]));
   atomicWrite(filePath, updated);
 }
 

@@ -6,6 +6,7 @@ import {
   markComplete,
   markIncomplete,
   setPriority,
+  setType,
   setDue,
   setDescription,
   setSubItemPriority,
@@ -366,6 +367,21 @@ const server = Bun.serve({
           return jsonResponse({ error: "Missing repo, number, or priority" }, 400);
         }
         setSubItemPriority(watcher.getDir(), parentId, body.repo, body.number, body.priority);
+        watcher.reload();
+        return jsonResponse({ ok: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return jsonResponse({ error: message }, 400);
+      }
+    }
+
+    if (req.method === "POST" && pathname.startsWith("/api/type/")) {
+      const id = extractIdFromPath(pathname, "/api/type/");
+      if (!id) return jsonResponse({ error: "Missing id" }, 400);
+      try {
+        const body = (await req.json()) as { type?: string };
+        if (!body.type?.trim()) return jsonResponse({ error: "Missing type" }, 400);
+        setType(watcher.getDir(), id, body.type.trim());
         watcher.reload();
         return jsonResponse({ ok: true });
       } catch (err) {
