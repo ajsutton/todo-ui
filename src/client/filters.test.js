@@ -115,6 +115,21 @@ describe('parseSearchQuery', () => {
     const r = parseSearchQuery('p:0');
     expect(r.dueFilter).toBe(null);
   });
+
+  it('parses @repo filter', () => {
+    const r = parseSearchQuery('@optimism');
+    expect(r.repoFilter).toBe('optimism');
+  });
+
+  it('parses @org/repo filter', () => {
+    const r = parseSearchQuery('@ethereum-optimism/optimism');
+    expect(r.repoFilter).toBe('ethereum-optimism/optimism');
+  });
+
+  it('returns null repoFilter when not present', () => {
+    const r = parseSearchQuery('p:0');
+    expect(r.repoFilter).toBe(null);
+  });
 });
 
 // ---- filterItems ----
@@ -333,6 +348,32 @@ describe('filterItems - due filter', () => {
   it('due:week excludes done items', () => {
     const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: 'due:week' });
     expect(res.map(i => i.id)).not.toContain('DONE');
+  });
+});
+
+// ---- filterItems - repo filter ----
+
+describe('filterItems - repo filter', () => {
+  const items = [
+    makeItem({ id: 'TODO-1', description: '[optimism/op-node#1](https://github.com) Fix bug' }),
+    makeItem({ id: 'TODO-2', description: '[base/base-node#5](https://github.com) Add feature' }),
+    makeItem({ id: 'TODO-3', description: 'No repo item' }),
+  ];
+  // Simulate items with repo field
+  items[0].repo = 'org/optimism';
+  items[1].repo = 'org/monorail';
+  items[2].repo = '';
+
+  it('filters by partial repo name', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: '@optimism' });
+    expect(res.map(i => i.id)).toContain('TODO-1');
+    expect(res.map(i => i.id)).not.toContain('TODO-2');
+    expect(res.map(i => i.id)).not.toContain('TODO-3');
+  });
+
+  it('returns items with no repo when @filter is absent', () => {
+    const res = filterItems(items, { filterType: '', filterStatus: '', searchQuery: '' });
+    expect(res.length).toBe(3);
   });
 });
 
