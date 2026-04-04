@@ -18,6 +18,8 @@ import { pushUndo } from './undo.js';
 
 // Stale IDs maintained across renders
 let staleIds = new Set();
+// Track previously visible item IDs for entry animation
+let prevVisibleIds = new Set();
 
 function truncateDesc(item) {
   const d = item.description || item.id;
@@ -140,6 +142,11 @@ export function renderTable() {
 
   syncUrl();
 
+  // Track which IDs are new (for entry animation)
+  const nowVisibleIds = new Set(items.map(i => i.id));
+  const newIds = new Set([...nowVisibleIds].filter(id => !prevVisibleIds.has(id)));
+  prevVisibleIds = nowVisibleIds;
+
   // Re-index selected row
   appState.selectedRowIndex = -1;
 
@@ -150,6 +157,7 @@ export function renderTable() {
     const hasSubItems = appState.subItemCache.has(item.id);
     const isExpanded = appState.expandedItems.has(item.id);
     const tr = buildItemRow(item, { hasSubItems, isExpanded });
+    if (newIds.has(item.id)) tr.classList.add('row-enter');
     tbody.appendChild(tr);
     if (isExpanded && appState.subItemCache.has(item.id)) {
       const subs = appState.subItemCache.get(item.id);
