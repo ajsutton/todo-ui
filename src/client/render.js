@@ -12,6 +12,22 @@ function getShowDetail() {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+// Format a YYYY-MM-DD date as a human-friendly relative string
+export function formatDueDate(due) {
+  if (!due) return '';
+  const now = new Date();
+  const t = new Date(due + 'T00:00:00');
+  const diffDays = Math.round((t - now) / 86400000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Tomorrow';
+  if (diffDays === -1) return 'Yesterday';
+  if (diffDays > 0 && diffDays <= 6) return `${diffDays}d`;
+  if (diffDays > 6 && diffDays <= 13) return `${Math.round(diffDays / 7)}w`;
+  if (diffDays < 0) return `${Math.abs(diffDays)}d ago`;
+  // Further out: show Mon DD
+  return t.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 export function renderTable() {
   let items = [...appState.items];
   items = filterItems(items, {
@@ -111,16 +127,19 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
   };
   tr.appendChild(tdPriority);
 
-  // Due cell with overdue/today highlighting
+  // Due cell with relative display and overdue/today highlighting
   const tdDue = document.createElement('td');
-  tdDue.textContent = item.due;
   tdDue.classList.add('editable');
-  if (item.due && !item.doneDate) {
-    const t = today();
-    if (item.due < t) {
-      tdDue.classList.add('due-overdue');
-    } else if (item.due === t) {
-      tdDue.classList.add('due-today');
+  if (item.due) {
+    tdDue.textContent = formatDueDate(item.due);
+    tdDue.title = item.due; // show raw date on hover
+    if (!item.doneDate) {
+      const t = today();
+      if (item.due < t) {
+        tdDue.classList.add('due-overdue');
+      } else if (item.due === t) {
+        tdDue.classList.add('due-today');
+      }
     }
   }
   tdDue.onclick = (e) => {
