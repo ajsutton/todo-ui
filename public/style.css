@@ -2690,61 +2690,6 @@ mark.search-highlight {
 }
 .streak-reset-btn:hover { color: var(--fg); }
 
-/* Right-click context menu */
-.ctx-menu {
-  position: fixed;
-  list-style: none;
-  margin: 0;
-  padding: 4px 0;
-  background: var(--panel-bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 6px 24px var(--shadow);
-  min-width: 190px;
-  z-index: 9000;
-  font-size: 13px;
-  animation: ctxFadeIn 0.08s ease;
-}
-
-@keyframes ctxFadeIn {
-  from { opacity: 0; transform: scale(0.96); }
-  to   { opacity: 1; transform: scale(1); }
-}
-
-.ctx-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  cursor: pointer;
-  color: var(--fg);
-  user-select: none;
-  border-radius: 4px;
-  margin: 0 2px;
-}
-
-.ctx-item:hover { background: var(--bg-secondary); }
-
-.ctx-item-current { font-weight: 600; }
-
-.ctx-item-danger { color: var(--status-fail, #e53e3e); }
-.ctx-item-danger:hover { background: color-mix(in srgb, var(--status-fail, #e53e3e) 12%, var(--bg)); }
-
-.ctx-icon {
-  width: 18px;
-  text-align: center;
-  flex-shrink: 0;
-  font-size: 14px;
-}
-
-.ctx-label { flex: 1; }
-
-.ctx-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 3px 8px;
-}
-
 /* Emoji reactions */
 .reaction-badges {
   display: inline-flex;

@@ -12,7 +12,6 @@ import { sortWithPinned, togglePin, isPinned } from './pinned.js';
 import { renderTagPills, showTagPicker, getTagsForItem } from './tags.js';
 import { getSnoozedIds } from './snooze.js';
 import { pushUndo } from './undo.js';
-import { showContextMenu } from './contextmenu.js';
 import { applyColumnVisibility } from './columns.js';
 import { renderReactionBadges, showReactionPicker, hasReactions } from './reactions.js';
 import { hasNote, getNote, showNoteEditor } from './notes.js';
@@ -192,7 +191,6 @@ export function buildItemRow(item, { hasSubItems, isExpanded }) {
     const showDetail = await getShowDetail();
     showDetail(item.id);
   };
-  tr.oncontextmenu = (e) => showContextMenu(e, item, tr);
 
   // Type cell
   const tdType = document.createElement('td');
