@@ -245,7 +245,8 @@ export class RealGitHubClient implements GitHubClient {
 export class MockGitHubClient implements GitHubClient {
   user = "testuser";
   batchResults = new Map<string, BatchResult>();
-  searchResults: GhSearchItem[] = [];
+  /** Results keyed by query substring. Falls back to empty array. */
+  searchResultsByQuery = new Map<string, GhSearchItem[]>();
   linkedPrsByIssue = new Map<string, LinkedPr[]>();
 
   async getUser(): Promise<string> {
@@ -261,12 +262,21 @@ export class MockGitHubClient implements GitHubClient {
     return results;
   }
 
-  async searchIssues(_query: string): Promise<GhSearchItem[]> {
-    return this.searchResults;
+  async searchIssues(query: string): Promise<GhSearchItem[]> {
+    // Match on query substring keys (e.g. "is:pr" or "is:issue")
+    for (const [key, items] of this.searchResultsByQuery) {
+      if (query.includes(key)) return items;
+    }
+    return [];
   }
 
   async findLinkedPrs(repo: string, issueNumber: number): Promise<LinkedPr[]> {
     return this.linkedPrsByIssue.get(`${repo}#${issueNumber}`) ?? [];
+  }
+
+  /** Helper: set search results for queries containing the given substring */
+  setSearchResults(querySubstring: string, items: GhSearchItem[]): void {
+    this.searchResultsByQuery.set(querySubstring, items);
   }
 
   /** Helper: register linked PRs for an issue */

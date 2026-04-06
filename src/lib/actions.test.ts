@@ -805,3 +805,548 @@ describe("addDiscoveredItems", () => {
     expect(content).toContain("TODO-4");
   });
 });
+
+// --- State transition tests via updateAll ---
+
+const STATE_FIXTURE = `# TODO
+
+## Items
+
+| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+| TODO-1 | [optimism#10](https://github.com/ethereum-optimism/optimism/pull/10) My PR | PR | Open | P2 | | |
+| TODO-2 | [optimism#20](https://github.com/ethereum-optimism/optimism/pull/20) Review request (reviewer) | Review | Pending | P1 | | |
+| TODO-3 | [optimism#30](https://github.com/ethereum-optimism/optimism/issues/30) Assigned issue | Issue | Open | P4 | | |
+`;
+
+function parseRow(content: string, id: string): Record<string, string> {
+  const line = content.split("\n").find((l) => l.includes(id));
+  if (!line) throw new Error(`Row ${id} not found`);
+  const cells = line.split("|").map((c) => c.trim());
+  return {
+    id: cells[1] ?? "",
+    description: cells[2] ?? "",
+    type: cells[3] ?? "",
+    status: cells[4] ?? "",
+    priority: cells[5] ?? "",
+    due: cells[6] ?? "",
+    done: cells[7] ?? "",
+  };
+}
+
+function stateItems(): TodoItem[] {
+  return [
+    makeItem({
+      id: "TODO-1", type: "PR", repo: "ethereum-optimism/optimism", prNumber: 10,
+      githubUrl: "https://github.com/ethereum-optimism/optimism/pull/10", priority: "P2",
+    }),
+    makeItem({
+      id: "TODO-2", type: "Review", repo: "ethereum-optimism/optimism", prNumber: 20,
+      githubUrl: "https://github.com/ethereum-optimism/optimism/pull/20", priority: "P1",
+    }),
+    makeItem({
+      id: "TODO-3", type: "Issue", repo: "ethereum-optimism/optimism", prNumber: 30,
+      githubUrl: "https://github.com/ethereum-optimism/optimism/issues/30", priority: "P4",
+    }),
+  ];
+}
+
+describe("updateAll — PR state transitions", () => {
+  let tmpDir: string;
+  let mock: MockGitHubClient;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "todo-test-"));
+    writeFileSync(join(tmpDir, "TODO.md"), STATE_FIXTURE, "utf-8");
+    mock = new MockGitHubClient();
+    // Default: other items return no data (skipped)
+    mock.setBatchResult("ethereum-optimism/optimism", 20, { state: "OPEN", isDraft: false });
+    mock.setBatchResult("ethereum-optimism/optimism", 30, { state: "OPEN", assignees: [{ login: "testuser" }] });
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("PR merged → status Merged, done set, priority P1", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 10, { state: "MERGED" });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-1");
+    expect(row.status).toBe("Merged");
+    expect(row.done).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(row.priority).toBe("P1");
+  });
+
+  it("PR closed → status Closed, done set", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 10, { state: "CLOSED" });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-1");
+    expect(row.status).toBe("Closed");
+    expect(row.done).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("PR in merge queue → priority P5", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 10, {
+      state: "OPEN", isDraft: false, isInMergeQueue: true,
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-1");
+    expect(row.status).toBe("In merge queue");
+    expect(row.priority).toBe("P5");
+  });
+
+  it("PR approved + CI passing → priority P1", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 10, {
+      state: "OPEN", isDraft: false, reviewDecision: "APPROVED", mergeable: "MERGEABLE",
+      statusCheckRollup: [{ conclusion: "SUCCESS" }],
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-1");
+    expect(row.status).toBe("Open, CI passing, approved");
+    expect(row.priority).toBe("P1");
+  });
+
+  it("PR draft + CI failing", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 10, {
+      state: "OPEN", isDraft: true,
+      statusCheckRollup: [{ conclusion: "FAILURE" }],
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-1");
+    expect(row.status).toBe("Draft, CI failing");
+  });
+
+  it("PR open + CI pending", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 10, {
+      state: "OPEN", isDraft: false,
+      statusCheckRollup: [{ state: "PENDING" }],
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-1");
+    expect(row.status).toBe("Open, CI pending");
+  });
+
+  it("PR open + changes requested", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 10, {
+      state: "OPEN", isDraft: false, reviewDecision: "CHANGES_REQUESTED",
+      statusCheckRollup: [{ conclusion: "SUCCESS" }], mergeable: "MERGEABLE",
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-1");
+    expect(row.status).toBe("Open, CI passing, changes requested");
+  });
+
+  it("PR open + merge conflict", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 10, {
+      state: "OPEN", isDraft: false, reviewDecision: "APPROVED",
+      statusCheckRollup: [{ conclusion: "SUCCESS" }], mergeable: "CONFLICTING",
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-1");
+    expect(row.status).toBe("Open, CI passing, approved, merge conflict");
+  });
+
+  it("PR no change → row unchanged", async () => {
+    // Same as current state: Open, P2
+    mock.setBatchResult("ethereum-optimism/optimism", 10, {
+      state: "OPEN", isDraft: false, statusCheckRollup: [],
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-1");
+    expect(row.status).toBe("Open");
+    expect(row.priority).toBe("P2");
+    expect(row.done).toBe("");
+  });
+});
+
+describe("updateAll — Review state transitions", () => {
+  let tmpDir: string;
+  let mock: MockGitHubClient;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "todo-test-"));
+    writeFileSync(join(tmpDir, "TODO.md"), STATE_FIXTURE, "utf-8");
+    mock = new MockGitHubClient();
+    // Default: other items return stable state
+    mock.setBatchResult("ethereum-optimism/optimism", 10, { state: "OPEN", isDraft: false, statusCheckRollup: [] });
+    mock.setBatchResult("ethereum-optimism/optimism", 30, { state: "OPEN", assignees: [{ login: "testuser" }] });
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("Review PR merged → done", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 20, { state: "MERGED" });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-2");
+    expect(row.status).toBe("Merged");
+    expect(row.done).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("Review PR closed → done", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 20, { state: "CLOSED" });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-2");
+    expect(row.status).toBe("Closed");
+    expect(row.done).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("Review PR in merge queue → P5", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 20, {
+      state: "OPEN", isDraft: false, isInMergeQueue: true,
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-2");
+    expect(row.status).toBe("In merge queue");
+    expect(row.priority).toBe("P5");
+  });
+
+  it("Review approved by user → done", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 20, {
+      state: "OPEN", isDraft: false,
+      reviews: [{ user: { login: "testuser" }, state: "APPROVED", submitted_at: "2026-04-06" }],
+      reviewRequestedUsers: ["testuser"],
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-2");
+    expect(row.status).toBe("Approved");
+    expect(row.done).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("Review changes requested → blocked, P5", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 20, {
+      state: "OPEN", isDraft: false,
+      reviews: [{ user: { login: "testuser" }, state: "CHANGES_REQUESTED", submitted_at: "2026-04-06" }],
+      reviewRequestedUsers: ["testuser"],
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-2");
+    expect(row.status).toBe("[BLOCKED] Reviewed, awaiting author");
+    expect(row.priority).toBe("P5");
+  });
+
+  it("Review request removed → done", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 20, {
+      state: "OPEN", isDraft: false,
+      reviews: [],
+      reviewRequestedUsers: [],
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-2");
+    expect(row.status).toBe("Review request removed");
+    expect(row.done).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("Review PR is draft → not ready, P3", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 20, {
+      state: "OPEN", isDraft: true,
+      reviews: [],
+      reviewRequestedUsers: ["testuser"],
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-2");
+    expect(row.status).toBe("Draft, not ready for review");
+    expect(row.priority).toBe("P3");
+  });
+
+  it("Review pending + CI failing → P3", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 20, {
+      state: "OPEN", isDraft: false,
+      statusCheckRollup: [{ conclusion: "FAILURE" }],
+      reviews: [],
+      reviewRequestedUsers: ["testuser"],
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-2");
+    expect(row.status).toBe("Pending, CI failing");
+    expect(row.priority).toBe("P3");
+  });
+
+  it("Review pending + CI passing → Pending", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 20, {
+      state: "OPEN", isDraft: false,
+      statusCheckRollup: [{ conclusion: "SUCCESS" }],
+      reviews: [],
+      reviewRequestedUsers: ["testuser"],
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-2");
+    expect(row.status).toBe("Pending");
+  });
+
+  it("Review with merge conflicts → blocked, P5", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 20, {
+      state: "OPEN", isDraft: false, mergeStateStatus: "DIRTY",
+      statusCheckRollup: [{ conclusion: "SUCCESS" }],
+      reviews: [],
+      reviewRequestedUsers: ["testuser"],
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-2");
+    expect(row.status).toContain("[BLOCKED]");
+    expect(row.status).toContain("merge conflicts");
+    expect(row.priority).toBe("P5");
+  });
+
+  it("Review commented → blocked, P5, awaiting author", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 20, {
+      state: "OPEN", isDraft: false,
+      reviews: [{ user: { login: "testuser" }, state: "COMMENTED", submitted_at: "2026-04-06" }],
+      reviewRequestedUsers: ["testuser"],
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-2");
+    expect(row.status).toBe("[BLOCKED] Reviewed, awaiting author");
+    expect(row.priority).toBe("P5");
+  });
+});
+
+describe("updateAll — Issue state transitions", () => {
+  let tmpDir: string;
+  let mock: MockGitHubClient;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "todo-test-"));
+    writeFileSync(join(tmpDir, "TODO.md"), STATE_FIXTURE, "utf-8");
+    mock = new MockGitHubClient();
+    // Default: other items return stable state
+    mock.setBatchResult("ethereum-optimism/optimism", 10, { state: "OPEN", isDraft: false, statusCheckRollup: [] });
+    mock.setBatchResult("ethereum-optimism/optimism", 20, { state: "OPEN", isDraft: false });
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("Issue closed → done", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 30, { state: "CLOSED" });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-3");
+    expect(row.status).toBe("Closed");
+    expect(row.done).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("Issue unassigned → done", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 30, {
+      state: "OPEN", assignees: [{ login: "someone-else" }],
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-3");
+    expect(row.status).toBe("Unassigned");
+    expect(row.done).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("Issue open + assigned → stays Open", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 30, {
+      state: "OPEN", assignees: [{ login: "testuser" }],
+    });
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-3");
+    expect(row.status).toBe("Open");
+    expect(row.done).toBe("");
+  });
+
+  it("Issue no change → row unchanged", async () => {
+    mock.setBatchResult("ethereum-optimism/optimism", 30, {
+      state: "OPEN", assignees: [{ login: "testuser" }],
+    });
+    const before = readFileSync(join(tmpDir, "TODO.md"), "utf-8");
+    await updateAll(tmpDir, stateItems(), undefined, mock);
+    const after = readFileSync(join(tmpDir, "TODO.md"), "utf-8");
+    // Issue row should be identical (status was already "Open")
+    const rowBefore = before.split("\n").find((l) => l.includes("TODO-3"));
+    const rowAfter = after.split("\n").find((l) => l.includes("TODO-3"));
+    expect(rowAfter).toBe(rowBefore);
+  });
+});
+
+describe("updateAll — issue priority from sub-items", () => {
+  let tmpDir: string;
+  let mock: MockGitHubClient;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "todo-test-"));
+    mock = new MockGitHubClient();
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("issue priority recomputed from linked PR priorities", async () => {
+    const fixture = `# TODO
+
+## Items
+
+| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+| TODO-1 | [optimism#50](https://github.com/ethereum-optimism/optimism/issues/50) Issue with PRs | Issue | Open | P4 | | |
+`;
+    writeFileSync(join(tmpDir, "TODO.md"), fixture, "utf-8");
+    // Detail file with a P2 sub-item
+    writeFileSync(join(tmpDir, "TODO-1.md"), `# Issue
+
+## Issue
+[optimism#50](https://github.com/ethereum-optimism/optimism/issues/50)
+
+## PRs
+| PR | Title | Status | Priority |
+|----|-------|--------|----------|
+| [optimism#51](https://github.com/ethereum-optimism/optimism/pull/51) | Fix | Open | P2 |
+`, "utf-8");
+
+    mock.setBatchResult("ethereum-optimism/optimism", 50, {
+      state: "OPEN", assignees: [{ login: "testuser" }],
+    });
+
+    const items = [makeItem({
+      id: "TODO-1", type: "Issue", repo: "ethereum-optimism/optimism", prNumber: 50,
+      githubUrl: "https://github.com/ethereum-optimism/optimism/issues/50", priority: "P4",
+    })];
+
+    await updateAll(tmpDir, items, undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-1");
+    // P2 from the sub-item, but floor is P3 for issues with sub-items
+    expect(row.priority).toBe("P2");
+  });
+
+  it("issue with no sub-items stays P4", async () => {
+    const fixture = `# TODO
+
+## Items
+
+| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+| TODO-1 | [optimism#50](https://github.com/ethereum-optimism/optimism/issues/50) Empty issue | Issue | Open | P4 | | |
+`;
+    writeFileSync(join(tmpDir, "TODO.md"), fixture, "utf-8");
+
+    mock.setBatchResult("ethereum-optimism/optimism", 50, {
+      state: "OPEN", assignees: [{ login: "testuser" }],
+    });
+
+    const items = [makeItem({
+      id: "TODO-1", type: "Issue", repo: "ethereum-optimism/optimism", prNumber: 50,
+      githubUrl: "https://github.com/ethereum-optimism/optimism/issues/50", priority: "P4",
+    })];
+
+    await updateAll(tmpDir, items, undefined, mock);
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-1");
+    expect(row.priority).toBe("P4");
+  });
+});
+
+describe("updateAll — discovery", () => {
+  let tmpDir: string;
+  let mock: MockGitHubClient;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "todo-test-"));
+    mock = new MockGitHubClient();
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("discovers new PR from GitHub search", async () => {
+    const fixture = `# TODO
+
+## Items
+
+| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+`;
+    writeFileSync(join(tmpDir, "TODO.md"), fixture, "utf-8");
+
+    mock.setSearchResults("author:", [{
+      repository_url: "https://api.github.com/repos/ethereum-optimism/optimism",
+      number: 999,
+      title: "New PR",
+      html_url: "https://github.com/ethereum-optimism/optimism/pull/999",
+      draft: false,
+      user: { login: "testuser" },
+    }]);
+
+    const { discovered } = await updateAll(tmpDir, [], undefined, mock);
+    expect(discovered.length).toBe(1);
+    expect(discovered[0]!.prNumber).toBe(999);
+    expect(discovered[0]!.type).toBe("PR");
+  });
+
+  it("does not re-discover already tracked items", async () => {
+    const fixture = `# TODO
+
+## Items
+
+| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+| TODO-1 | [optimism#999](https://github.com/ethereum-optimism/optimism/pull/999) Existing PR | PR | Open | P2 | | |
+`;
+    writeFileSync(join(tmpDir, "TODO.md"), fixture, "utf-8");
+
+    mock.setBatchResult("ethereum-optimism/optimism", 999, { state: "OPEN", isDraft: false, statusCheckRollup: [] });
+    mock.setSearchResults("author:", [{
+      repository_url: "https://api.github.com/repos/ethereum-optimism/optimism",
+      number: 999,
+      title: "Existing PR",
+      html_url: "https://github.com/ethereum-optimism/optimism/pull/999",
+      draft: false,
+      user: { login: "testuser" },
+    }]);
+
+    const items = [makeItem({
+      id: "TODO-1", type: "PR", repo: "ethereum-optimism/optimism", prNumber: 999,
+      githubUrl: "https://github.com/ethereum-optimism/optimism/pull/999",
+    })];
+
+    const { discovered } = await updateAll(tmpDir, items, undefined, mock);
+    expect(discovered.length).toBe(0);
+  });
+});
+
+describe("updateAll — old item cleanup", () => {
+  let tmpDir: string;
+  let mock: MockGitHubClient;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "todo-test-"));
+    mock = new MockGitHubClient();
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("removes items done > 30 days ago", async () => {
+    const oldDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const fixture = `# TODO
+
+## Items
+
+| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+| TODO-1 | Old done item | PR | Merged | P1 | | ${oldDate} |
+| TODO-2 | Recent item | PR | Open | P2 | | |
+`;
+    writeFileSync(join(tmpDir, "TODO.md"), fixture, "utf-8");
+    writeFileSync(join(tmpDir, "TODO-1.md"), "detail file", "utf-8");
+
+    mock.setBatchResult("ethereum-optimism/optimism", 10, { state: "OPEN", isDraft: false, statusCheckRollup: [] });
+
+    const items = [
+      makeItem({ id: "TODO-1", type: "PR", doneDate: oldDate }),
+      makeItem({
+        id: "TODO-2", type: "PR", repo: "ethereum-optimism/optimism", prNumber: 10,
+        githubUrl: "https://github.com/ethereum-optimism/optimism/pull/10",
+      }),
+    ];
+
+    await updateAll(tmpDir, items, undefined, mock);
+    const content = readFileSync(join(tmpDir, "TODO.md"), "utf-8");
+    expect(content).not.toContain("TODO-1");
+    expect(content).toContain("TODO-2");
+    expect(existsSync(join(tmpDir, "TODO-1.md"))).toBe(false);
+  });
+});
