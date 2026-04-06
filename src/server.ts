@@ -252,6 +252,7 @@ function extractIdFromPath(pathname: string, prefix: string): string | undefined
 const server = Bun.serve({
   hostname: HOST,
   port: PORT,
+  idleTimeout: 120, // seconds — updateAll can take 30s+ with many GitHub API calls
 
   async fetch(req) {
     const url = new URL(req.url);

@@ -1133,24 +1133,16 @@ async function discoverNewItems(
   }
 
   // Discover assigned issues and find linked PRs for each
-  const issueKeys = new Set<string>();
+  // Note: for already-tracked issues, refreshIssueLinks already ran and created/updated
+  // detail files. collectTrackedKeys (above) picks up linked PR keys from those files,
+  // so we skip the findLinkedPrs call for tracked issues to avoid redundant API calls.
   for (const issue of assignedIssues) {
     const repo = issue.repository_url.replace("https://api.github.com/repos/", "");
     const key = `${repo}#${issue.number}`;
-    issueKeys.add(key);
+    if (tracked.has(key)) continue;
 
-    // Find open PRs that reference this issue
+    // New issue — find linked PRs
     const linkedPrs = await ghClient.findLinkedPrs(repo, issue.number);
-
-    // For already-tracked issues, add linked PR keys to tracked set
-    // so they aren't added as standalone items
-    if (tracked.has(key)) {
-      for (const lp of linkedPrs) {
-        const fullRepo = lp.repo.includes("/") ? lp.repo : `${SEARCH_ORG}/${lp.repo}`;
-        tracked.add(`${fullRepo}#${lp.number}`);
-      }
-      continue;
-    }
 
     // P4 if no linked PRs (not started), P3+ if there are (work in progress)
     let priority = linkedPrs.length > 0 ? 3 : 4;
