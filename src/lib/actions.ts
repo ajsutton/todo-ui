@@ -1,6 +1,10 @@
 import { readFileSync, writeFileSync, renameSync, existsSync, unlinkSync, readdirSync } from "node:fs";
 import path from "node:path";
 import type { TodoItem, GhPrStatus, ClaudeChunk, DiscoveredItem, LinkedPr } from "../types.ts";
+import {
+  type GitHubClient, type BatchQuery, type BatchResult,
+  defaultGitHubClient,
+} from "./github-client.ts";
 
 const SEARCH_ORG = "ethereum-optimism";
 
@@ -365,203 +369,6 @@ export async function refreshAllPrStatuses(
 
 // --- Full /todo update logic ---
 
-interface GhReview {
-  user: { login: string };
-  state: string;
-  submitted_at?: string;
-}
-
-async function getGhUser(): Promise<string> {
-  const proc = Bun.spawn(["gh", "api", "user", "--jq", ".login"]);
-  const output = await new Response(proc.stdout).text();
-  const exitCode = await proc.exited;
-  if (exitCode !== 0) throw new Error("Could not determine GitHub user");
-  return output.trim();
-}
-
-async function ghPrView(repo: string, number: number): Promise<Record<string, unknown> | null> {
-  const proc = Bun.spawn([
-    "gh", "pr", "view", String(number), "--repo", repo,
-    "--json", "state,isDraft,statusCheckRollup,reviewDecision,mergeable,mergeStateStatus,mergedAt,closedAt,mergeQueueEntry",
-  ]);
-  const output = await new Response(proc.stdout).text();
-  const exitCode = await proc.exited;
-  if (exitCode !== 0) return null;
-  try { return JSON.parse(output); } catch { return null; }
-}
-
-async function ghIssueView(repo: string, number: number): Promise<Record<string, unknown> | null> {
-  const proc = Bun.spawn([
-    "gh", "issue", "view", String(number), "--repo", repo,
-    "--json", "state,title,assignees",
-  ]);
-  const output = await new Response(proc.stdout).text();
-  const exitCode = await proc.exited;
-  if (exitCode !== 0) return null;
-  try { return JSON.parse(output); } catch { return null; }
-}
-
-async function ghUserReviews(repo: string, number: number): Promise<GhReview[]> {
-  const proc = Bun.spawn(["gh", "api", `repos/${repo}/pulls/${number}/reviews`]);
-  const output = await new Response(proc.stdout).text();
-  const exitCode = await proc.exited;
-  if (exitCode !== 0) return [];
-  try { return JSON.parse(output) as GhReview[]; } catch { return []; }
-}
-
-// --- Batch GitHub API ---
-
-interface BatchQuery {
-  key: string;           // unique alias for GraphQL
-  owner: string;
-  repo: string;
-  number: number;
-  isPr: boolean;         // true = PR, false = issue
-  needsReviews: boolean; // true = also fetch latest reviews
-}
-
-interface BatchResult {
-  // PR fields
-  state?: string;
-  isDraft?: boolean;
-  reviewDecision?: string;
-  mergeable?: string;
-  mergeStateStatus?: string;
-  statusCheckRollup?: Array<Record<string, unknown>>;
-  isInMergeQueue?: boolean;
-  // Issue fields
-  assignees?: Array<{ login: string }>;
-  // Review fields (for Review items)
-  reviews?: GhReview[];
-  reviewRequestedUsers?: string[];
-}
-
-const BATCH_SIZE = 30; // GitHub GraphQL has a cost limit; ~30 nodes is safe
-
-async function ghBatchQuery(
-  queries: BatchQuery[],
-): Promise<Map<string, BatchResult>> {
-  const results = new Map<string, BatchResult>();
-  if (queries.length === 0) return results;
-
-  // Process in batches
-  for (let i = 0; i < queries.length; i += BATCH_SIZE) {
-    const batch = queries.slice(i, i + BATCH_SIZE);
-    const fragments: string[] = [];
-
-    for (const q of batch) {
-      if (q.isPr) {
-        fragments.push(`
-          ${q.key}: repository(owner: "${q.owner}", name: "${q.repo}") {
-            pullRequest(number: ${q.number}) {
-              state
-              isDraft
-              reviewDecision
-              mergeable
-              mergeStateStatus
-              mergeQueueEntry { id }
-              statusCheckRollup: commits(last: 1) {
-                nodes {
-                  commit {
-                    statusCheckRollup {
-                      contexts(first: 100) {
-                        nodes {
-                          ... on CheckRun { conclusion }
-                          ... on StatusContext { state }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-              ${q.needsReviews ? `reviews(last: 50) { nodes { author { login } state submittedAt } }
-              reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { name } } } }` : ""}
-            }
-          }`);
-      } else {
-        fragments.push(`
-          ${q.key}: repository(owner: "${q.owner}", name: "${q.repo}") {
-            issue(number: ${q.number}) {
-              state
-              assignees(first: 20) { nodes { login } }
-            }
-          }`);
-      }
-    }
-
-    const query = `query { ${fragments.join("\n")} }`;
-    const proc = Bun.spawn(["gh", "api", "graphql", "-f", `query=${query}`]);
-    const output = await new Response(proc.stdout).text();
-    const exitCode = await proc.exited;
-    if (exitCode !== 0) continue;
-
-    let data: Record<string, Record<string, unknown>>;
-    try {
-      const parsed = JSON.parse(output) as { data?: Record<string, Record<string, unknown>> };
-      data = parsed.data ?? {};
-    } catch { continue; }
-
-    for (const q of batch) {
-      const repoData = data[q.key] as Record<string, Record<string, unknown>> | undefined;
-      if (!repoData) continue;
-
-      const node = q.isPr ? repoData["pullRequest"] : repoData["issue"];
-      if (!node) continue;
-
-      const result: BatchResult = {};
-
-      if (q.isPr) {
-        const pr = node as Record<string, unknown>;
-        result.state = pr["state"] as string;
-        result.isDraft = pr["isDraft"] as boolean;
-        result.reviewDecision = (pr["reviewDecision"] as string) ?? "";
-        result.mergeable = (pr["mergeable"] as string) ?? "";
-        result.mergeStateStatus = (pr["mergeStateStatus"] as string) ?? "";
-        result.isInMergeQueue = pr["mergeQueueEntry"] != null;
-
-        // Extract status check rollup from commits
-        const commits = pr["statusCheckRollup"] as Record<string, unknown> | undefined;
-        const commitNodes = (commits?.["nodes"] as Array<Record<string, unknown>>) ?? [];
-        const lastCommit = commitNodes[0];
-        if (lastCommit) {
-          const rollup = (lastCommit["commit"] as Record<string, unknown>)?.["statusCheckRollup"] as Record<string, unknown> | undefined;
-          const contexts = rollup?.["contexts"] as Record<string, unknown> | undefined;
-          result.statusCheckRollup = (contexts?.["nodes"] as Array<Record<string, unknown>>) ?? [];
-        }
-
-        // Extract reviews and review requests
-        if (q.needsReviews) {
-          const reviewsData = pr["reviews"] as Record<string, unknown> | undefined;
-          const reviewNodes = (reviewsData?.["nodes"] as Array<Record<string, unknown>>) ?? [];
-          result.reviews = reviewNodes.map((r) => ({
-            user: { login: ((r["author"] as Record<string, unknown>)?.["login"] as string) ?? "" },
-            state: (r["state"] as string) ?? "",
-            submitted_at: (r["submittedAt"] as string) ?? "",
-          }));
-
-          const reqData = pr["reviewRequests"] as Record<string, unknown> | undefined;
-          const reqNodes = (reqData?.["nodes"] as Array<Record<string, unknown>>) ?? [];
-          result.reviewRequestedUsers = reqNodes
-            .map((n) => {
-              const reviewer = n["requestedReviewer"] as Record<string, unknown> | undefined;
-              return (reviewer?.["login"] as string) ?? "";
-            })
-            .filter(Boolean);
-        }
-      } else {
-        const issue = node as Record<string, unknown>;
-        result.state = issue["state"] as string;
-        const assigneesData = issue["assignees"] as Record<string, unknown> | undefined;
-        result.assignees = ((assigneesData?.["nodes"] as Array<{ login: string }>) ?? []);
-      }
-
-      results.set(q.key, result);
-    }
-  }
-
-  return results;
-}
-
 function batchKeyFor(repo: string, number: number): string {
   // GraphQL aliases must be valid identifiers
   return `r_${repo.replace(/[^a-zA-Z0-9]/g, "_")}_${number}`;
@@ -611,6 +418,7 @@ export async function updateAll(
   todoDir: string,
   items: TodoItem[],
   onProgress?: ProgressCallback,
+  ghClient: GitHubClient = defaultGitHubClient,
 ): Promise<{ results: UpdateResult[]; discovered: DiscoveredItem[]; errors: UpdateError[] }> {
   const today = todayString();
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
@@ -641,7 +449,11 @@ export async function updateAll(
     items.filter((i) => i.doneDate && i.doneDate < sevenDaysAgo).map((i) => i.id),
   );
 
-  // Remove PR/Review items that are already tracked in a workstream detail file
+  // Refresh issue links — find PRs linked to tracked issues and create/update detail files
+  onProgress?.(0, 0, "Refreshing issue links");
+  await refreshIssueLinks(todoDir, items, staleIds, (repo, num) => ghClient.findLinkedPrs(repo, num));
+
+  // Remove PR/Review items that are already tracked in an issue or workstream detail file
   const workstreamKeys = collectTrackedKeys(todoDir, [], staleIds);  // only detail files, skip stale
   const filePath = path.join(todoDir, "TODO.md");
   {
@@ -671,7 +483,7 @@ export async function updateAll(
   // Get GitHub user for review checks and discovery
   let ghUser = "";
   let ghUserError = "";
-  try { ghUser = await getGhUser(); } catch (err) {
+  try { ghUser = await ghClient.getUser(); } catch (err) {
     ghUserError = err instanceof Error ? err.message : String(err);
   }
 
@@ -700,7 +512,7 @@ export async function updateAll(
     });
   }
 
-  const batchResults = await ghBatchQuery(batchQueries);
+  const batchResults = await ghClient.batchQuery(batchQueries);
   onProgress?.(Math.floor(total * 0.8), total, "Processing results");
 
   // Process each item using pre-fetched data
@@ -772,7 +584,7 @@ export async function updateAll(
       }
     }
 
-    const wsBatchResults = wsBatchQueries.length > 0 ? await ghBatchQuery(wsBatchQueries) : new Map();
+    const wsBatchResults = wsBatchQueries.length > 0 ? await ghClient.batchQuery(wsBatchQueries) : new Map();
 
     // Process each workstream with pre-fetched data
     for (const [wsId, entry] of wsRefMap) {
@@ -880,7 +692,7 @@ export async function updateAll(
 
   // Discover new items
   onProgress?.(total, total, "Scanning for new items");
-  const discovered = ghUser ? await discoverNewItems(todoDir, items, ghUser, staleIds) : [];
+  const discovered = ghUser ? await discoverNewItems(todoDir, items, ghUser, staleIds, ghClient) : [];
   if (ghUserError) {
     errors.push({ id: "(auth)", description: "GitHub authentication", error: `Could not determine GitHub user: ${ghUserError}` });
   }
@@ -1222,78 +1034,7 @@ function parseGhPrJsonRaw(raw: Record<string, unknown>): GhPrStatus {
 
 // --- Discovery ---
 
-interface GhSearchItem {
-  repository_url: string;
-  number: number;
-  title: string;
-  html_url: string;
-  draft?: boolean;
-  user: { login: string };
-}
-
-async function findLinkedPrs(repo: string, issueNumber: number): Promise<LinkedPr[]> {
-  // Use the timeline API to find PRs that reference this issue
-  const proc = Bun.spawn(["gh", "api", `repos/${repo}/issues/${issueNumber}/timeline?per_page=100`]);
-  const output = await new Response(proc.stdout).text();
-  const exitCode = await proc.exited;
-  if (exitCode !== 0) return [];
-
-  let events: Array<Record<string, unknown>>;
-  try {
-    events = JSON.parse(output) as Array<Record<string, unknown>>;
-  } catch { return []; }
-
-  const linkedPrs: LinkedPr[] = [];
-  const seen = new Set<string>();
-
-  for (const event of events) {
-    if (event["event"] !== "cross-referenced") continue;
-    const source = event["source"] as Record<string, unknown> | undefined;
-    if (!source) continue;
-    const issue = source["issue"] as Record<string, unknown> | undefined;
-    if (!issue) continue;
-    // Only include pull requests (they have pull_request key)
-    if (!issue["pull_request"]) continue;
-    // Only include open PRs
-    if (issue["state"] !== "open") continue;
-
-    const prUrl = issue["html_url"] as string;
-    const prNumber = issue["number"] as number;
-    const prRepo = (issue["repository_url"] as string).replace("https://api.github.com/repos/", "");
-    const key = `${prRepo}#${prNumber}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    const isDraft = !!(issue["draft"] as boolean);
-    const prPriority = isDraft ? "P3" : "P2";
-    const status = isDraft ? "Draft" : "Open";
-
-    linkedPrs.push({
-      repo: prRepo,
-      number: prNumber,
-      title: issue["title"] as string,
-      url: prUrl,
-      status,
-      priority: prPriority,
-      isDraft,
-    });
-  }
-
-  return linkedPrs;
-}
-
-async function ghSearchIssues(query: string): Promise<GhSearchItem[]> {
-  const proc = Bun.spawn(["gh", "api", `search/issues?q=${query}&per_page=50`]);
-  const output = await new Response(proc.stdout).text();
-  const exitCode = await proc.exited;
-  if (exitCode !== 0) return [];
-  try {
-    const data = JSON.parse(output) as { items?: GhSearchItem[] };
-    return data.items ?? [];
-  } catch { return []; }
-}
-
-function collectTrackedKeys(todoDir: string, items: TodoItem[], excludeDetailIds?: Set<string>): Set<string> {
+export function collectTrackedKeys(todoDir: string, items: TodoItem[], excludeDetailIds?: Set<string>): Set<string> {
   const tracked = new Set<string>();
 
   function addKey(repo: string, num: string | number): void {
@@ -1345,16 +1086,17 @@ async function discoverNewItems(
   todoDir: string,
   items: TodoItem[],
   ghUser: string,
-  staleIds?: Set<string>,
+  staleIds: Set<string> | undefined,
+  ghClient: GitHubClient,
 ): Promise<DiscoveredItem[]> {
   const tracked = collectTrackedKeys(todoDir, items, staleIds);
   const discovered: DiscoveredItem[] = [];
 
   // Run all searches in parallel
   const [myPrs, reviewRequests, assignedIssues] = await Promise.all([
-    ghSearchIssues(`author:${ghUser}+is:open+is:pr+org:${SEARCH_ORG}`),
-    ghSearchIssues(`user-review-requested:${ghUser}+is:open+is:pr+draft:false+org:${SEARCH_ORG}`),
-    ghSearchIssues(`assignee:${ghUser}+is:open+is:issue+org:${SEARCH_ORG}`),
+    ghClient.searchIssues(`author:${ghUser}+is:open+is:pr+org:${SEARCH_ORG}`),
+    ghClient.searchIssues(`user-review-requested:${ghUser}+is:open+is:pr+draft:false+org:${SEARCH_ORG}`),
+    ghClient.searchIssues(`assignee:${ghUser}+is:open+is:issue+org:${SEARCH_ORG}`),
   ]);
 
   // Track review request keys to avoid duplicates with my PRs
@@ -1396,10 +1138,19 @@ async function discoverNewItems(
     const repo = issue.repository_url.replace("https://api.github.com/repos/", "");
     const key = `${repo}#${issue.number}`;
     issueKeys.add(key);
-    if (tracked.has(key)) continue;
 
     // Find open PRs that reference this issue
-    const linkedPrs = await findLinkedPrs(repo, issue.number);
+    const linkedPrs = await ghClient.findLinkedPrs(repo, issue.number);
+
+    // For already-tracked issues, add linked PR keys to tracked set
+    // so they aren't added as standalone items
+    if (tracked.has(key)) {
+      for (const lp of linkedPrs) {
+        const fullRepo = lp.repo.includes("/") ? lp.repo : `${SEARCH_ORG}/${lp.repo}`;
+        tracked.add(`${fullRepo}#${lp.number}`);
+      }
+      continue;
+    }
 
     // P4 if no linked PRs (not started), P3+ if there are (work in progress)
     let priority = linkedPrs.length > 0 ? 3 : 4;
@@ -1408,7 +1159,7 @@ async function discoverNewItems(
       if (!Number.isNaN(pNum) && pNum < priority) priority = pNum;
     }
 
-    discovered.push({
+    const item: DiscoveredItem = {
       repo,
       prNumber: issue.number,
       title: issue.title,
@@ -1416,8 +1167,9 @@ async function discoverNewItems(
       type: "Issue",
       suggestedPriority: `P${priority}`,
       author: issue.user.login,
-      linkedPrs: linkedPrs.length > 0 ? linkedPrs : undefined,
-    });
+    };
+    if (linkedPrs.length > 0) item.linkedPrs = linkedPrs;
+    discovered.push(item);
   }
 
   return discovered;
@@ -1511,6 +1263,119 @@ export function addDiscoveredItems(todoDir: string, newItems: DiscoveredItem[]):
     detailLines.push(``);
     atomicWrite(path.join(todoDir, `${id}.md`), detailLines.join("\n"));
   }
+}
+
+/**
+ * For each tracked Issue item, check for linked PRs via the GitHub timeline API.
+ * Creates or updates detail files so that linked PRs appear as sub-items
+ * rather than standalone TODO entries. Returns the set of PR keys that are now
+ * tracked in issue detail files.
+ */
+export async function refreshIssueLinks(
+  todoDir: string,
+  items: TodoItem[],
+  staleIds?: Set<string>,
+  findLinkedPrsFn: (repo: string, issueNumber: number) => Promise<LinkedPr[]> = (r, n) => defaultGitHubClient.findLinkedPrs(r, n),
+): Promise<Set<string>> {
+  const linkedPrKeys = new Set<string>();
+  const issueItems = items.filter(
+    (i) => i.type === "Issue" && !i.doneDate && i.repo && i.prNumber,
+  );
+  if (issueItems.length === 0) return linkedPrKeys;
+
+  // Check linked PRs for all issues in parallel
+  const results = await Promise.all(
+    issueItems.map(async (issue) => {
+      const linkedPrs = await findLinkedPrsFn(issue.repo!, issue.prNumber!);
+      return { issue, linkedPrs };
+    }),
+  );
+
+  for (const { issue, linkedPrs } of results) {
+    if (linkedPrs.length === 0) continue;
+
+    // Add all linked PR keys to the result set
+    for (const lp of linkedPrs) {
+      const fullRepo = lp.repo.includes("/") ? lp.repo : `${SEARCH_ORG}/${lp.repo}`;
+      linkedPrKeys.add(`${fullRepo}#${lp.number}`);
+    }
+
+    const detailPath = path.join(todoDir, `${issue.id}.md`);
+
+    if (existsSync(detailPath)) {
+      // Detail file exists — add any PRs not already listed
+      const content = readFileSync(detailPath, "utf-8");
+      const existingRefs = parseDetailPrRefs(content);
+      const existingKeys = new Set(existingRefs.map((r) => `${r.repo}#${r.number}`));
+
+      const newPrs = linkedPrs.filter((lp) => {
+        const fullRepo = lp.repo.includes("/") ? lp.repo : `${SEARCH_ORG}/${lp.repo}`;
+        return !existingKeys.has(`${fullRepo}#${lp.number}`);
+      });
+
+      if (newPrs.length > 0) {
+        // Find the last table row in the PRs section and append
+        const lines = content.split("\n");
+        let lastTableRow = -1;
+        let inPrTable = false;
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i]!.trim();
+          if (line.startsWith("## PRs")) { inPrTable = true; continue; }
+          if (inPrTable && line.startsWith("|") && !line.match(/^\|\s*-+/)) {
+            // Skip header row
+            const cells = line.split("|").map((c) => c.trim());
+            if (cells.some((c) => /^pr$/i.test(c) || /^title$/i.test(c) || /^status$/i.test(c))) continue;
+            lastTableRow = i;
+          }
+          if (inPrTable && !line.startsWith("|") && line !== "") break;
+        }
+        if (lastTableRow === -1) {
+          // No data rows yet — find separator row
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i]!.trim().match(/^\|\s*-+/) && inPrTable) {
+              lastTableRow = i;
+              break;
+            }
+          }
+        }
+        if (lastTableRow !== -1) {
+          const newRows = newPrs.map((lp) => {
+            const lpShortRepo = lp.repo.startsWith(`${SEARCH_ORG}/`)
+              ? lp.repo.slice(SEARCH_ORG.length + 1)
+              : lp.repo;
+            return `| [${lpShortRepo}#${lp.number}](${lp.url}) | ${lp.title} | ${lp.status} | ${lp.priority} |`;
+          });
+          lines.splice(lastTableRow + 1, 0, ...newRows);
+          atomicWrite(detailPath, lines.join("\n"));
+        }
+      }
+    } else {
+      // No detail file — create one
+      const shortRepo = issue.repo!.startsWith(`${SEARCH_ORG}/`)
+        ? issue.repo!.slice(SEARCH_ORG.length + 1)
+        : issue.repo!;
+      const detailLines = [
+        `# ${issue.description.replace(/^\[.*?\]\(.*?\)\s*/, "")}`,
+        ``,
+        `## Issue`,
+        `[${shortRepo}#${issue.prNumber}](${issue.githubUrl})`,
+        ``,
+        `## PRs`,
+        `| PR | Title | Status | Priority |`,
+        `|----|-------|--------|----------|`,
+      ];
+      for (const lp of linkedPrs) {
+        const lpShortRepo = lp.repo.startsWith(`${SEARCH_ORG}/`)
+          ? lp.repo.slice(SEARCH_ORG.length + 1)
+          : lp.repo;
+        detailLines.push(`| [${lpShortRepo}#${lp.number}](${lp.url}) | ${lp.title} | ${lp.status} | ${lp.priority} |`);
+      }
+      detailLines.push(``);
+      atomicWrite(path.join(todoDir, `${issue.id}.md`), detailLines.join("\n"));
+    }
+  }
+
+  return linkedPrKeys;
 }
 
 export function addManualItem(
