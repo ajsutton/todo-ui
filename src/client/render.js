@@ -497,7 +497,8 @@ export function buildSubItemRow(sub, parentId) {
   const status = sub.currentStatus;
   tdStatus.textContent = status;
   applyStatusClass(tdStatus, status);
-  if (status.toLowerCase().includes('merged')) tdStatus.classList.add('sub-item-merged');
+  const sl = status.toLowerCase();
+  if (sl.includes('merged') || sl.includes('closed')) tdStatus.classList.add('sub-item-done');
   tr.appendChild(tdStatus);
 
   const tdPriority = document.createElement('td');

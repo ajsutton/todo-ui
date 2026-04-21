@@ -62,6 +62,10 @@ export function checkForNotifiableChanges(newItems) {
     if (!pl.includes('merged') && sl.includes('merged')) {
       notify('🎉 Merged!', name, item.id + '-merged');
     }
+    // Closed (without merging)
+    if (!pl.includes('closed') && sl.includes('closed')) {
+      notify('🗑️ Closed', name, item.id + '-closed');
+    }
     // Ready to merge (approved + CI passing)
     if (sl.includes('approved') && sl.includes('ci passing') &&
         !(pl.includes('approved') && pl.includes('ci passing'))) {

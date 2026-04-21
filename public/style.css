@@ -1064,7 +1064,7 @@ td.editable:hover {
   padding-left: 64px !important;
 }
 
-.sub-item-merged {
+.sub-item-done {
   opacity: 0.5;
   text-decoration: line-through;
 }
