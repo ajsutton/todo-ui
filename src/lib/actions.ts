@@ -551,14 +551,16 @@ export async function updateAll(
     atomicWrite(filePath, content);
   }
 
-  // Update workstream detail files
-  const workstreamItems = items.filter((i) => i.type === "Workstream" && !i.doneDate);
-  if (workstreamItems.length > 0) {
+  // Update workstream and issue detail files (refresh linked PR statuses)
+  const detailItems = items.filter(
+    (i) => (i.type === "Workstream" || i.type === "Issue") && !i.doneDate,
+  );
+  if (detailItems.length > 0) {
     onProgress?.(total, total, "Updating workstreams");
 
-    // Collect all active PR refs across all workstreams for a single batch query
+    // Collect all active PR refs across all detail files for a single batch query
     const wsRefMap = new Map<string, { item: TodoItem; refs: DetailPrRef[]; activeRefs: DetailPrRef[] }>();
-    for (const ws of workstreamItems) {
+    for (const ws of detailItems) {
       const detailPath = path.join(todoDir, `${ws.id}.md`);
       if (!existsSync(detailPath)) continue;
       const content = readFileSync(detailPath, "utf-8");
@@ -571,7 +573,7 @@ export async function updateAll(
       wsRefMap.set(ws.id, { item: ws, refs, activeRefs });
     }
 
-    // Batch-fetch all active workstream PRs
+    // Batch-fetch all active sub-item PRs
     const wsBatchQueries: BatchQuery[] = [];
     for (const [, entry] of wsRefMap) {
       for (const ref of entry.activeRefs) {
@@ -586,11 +588,15 @@ export async function updateAll(
 
     const wsBatchResults = wsBatchQueries.length > 0 ? await ghClient.batchQuery(wsBatchQueries) : new Map();
 
-    // Process each workstream with pre-fetched data
+    // Process each detail file with pre-fetched data
     for (const [wsId, entry] of wsRefMap) {
       try {
         const wsResult = updateWorkstreamDetailWithData(todoDir, entry.item, entry.refs, entry.activeRefs, wsBatchResults);
-        if (wsResult) {
+        // For Issues, processFetchedItem already set the main-row status from the
+        // GitHub issue state (Open/Closed/Unassigned). Don't overwrite it with a
+        // sub-item summary — only Workstreams derive their main-row status from
+        // sub-items.
+        if (wsResult && entry.item.type === "Workstream") {
           let content = readFileSync(filePath, "utf-8");
           content = replaceCells(content, wsId, new Map([[CELL_STATUS, wsResult.newStatus]]));
           atomicWrite(filePath, content);

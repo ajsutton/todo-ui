@@ -1211,6 +1211,49 @@ describe("updateAll — issue priority from sub-items", () => {
     expect(row.priority).toBe("P2");
   });
 
+  it("issue sub-item PR closed → status in detail file updated to Closed", async () => {
+    const fixture = `# TODO
+
+## Items
+
+| ID | Description | Type | Status | Priority | Due | Done |
+|----|-------------|------|--------|----------|-----|------|
+| TODO-1 | [optimism#50](https://github.com/ethereum-optimism/optimism/issues/50) Issue with closed PR | Issue | Open | P3 | | |
+`;
+    writeFileSync(join(tmpDir, "TODO.md"), fixture, "utf-8");
+    writeFileSync(join(tmpDir, "TODO-1.md"), `# Issue
+
+## Issue
+[optimism#50](https://github.com/ethereum-optimism/optimism/issues/50)
+
+## PRs
+| PR | Title | Status | Priority |
+|----|-------|--------|----------|
+| [optimism#51](https://github.com/ethereum-optimism/optimism/pull/51) | Abandoned | Draft | P3 |
+`, "utf-8");
+
+    mock.setBatchResult("ethereum-optimism/optimism", 50, {
+      state: "OPEN", assignees: [{ login: "testuser" }],
+    });
+    mock.setBatchResult("ethereum-optimism/optimism", 51, { state: "CLOSED" });
+
+    const items = [makeItem({
+      id: "TODO-1", type: "Issue", repo: "ethereum-optimism/optimism", prNumber: 50,
+      githubUrl: "https://github.com/ethereum-optimism/optimism/issues/50", priority: "P3",
+    })];
+
+    await updateAll(tmpDir, items, undefined, mock);
+
+    const detail = readFileSync(join(tmpDir, "TODO-1.md"), "utf-8");
+    expect(detail).toContain("| Closed |");
+    expect(detail).not.toContain("| Draft |");
+
+    // Main row stays "Open" — Issue status comes from the issue state, not a sub-item summary
+    const row = parseRow(readFileSync(join(tmpDir, "TODO.md"), "utf-8"), "TODO-1");
+    expect(row.status).toBe("Open");
+    expect(row.done).toBe("");
+  });
+
   it("issue with no sub-items stays P4", async () => {
     const fixture = `# TODO
 
