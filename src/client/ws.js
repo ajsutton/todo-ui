@@ -25,6 +25,62 @@ function handleUpdateProgress(data) {
 }
 
 let reconnectCountdownInterval = null;
+let reconnectTimeoutId = null;
+let pingIntervalId = null;
+let lastPongAt = 0;
+
+const PING_INTERVAL_MS = 30000;
+const PONG_TIMEOUT_MS = 45000;
+
+function stopPinging() {
+  if (pingIntervalId !== null) {
+    clearInterval(pingIntervalId);
+    pingIntervalId = null;
+  }
+}
+
+function startPinging() {
+  stopPinging();
+  lastPongAt = Date.now();
+  pingIntervalId = setInterval(() => {
+    if (!appState.ws || appState.ws.readyState !== WebSocket.OPEN) return;
+    if (Date.now() - lastPongAt > PONG_TIMEOUT_MS) {
+      // Server hasn't responded to a ping — connection is dead. Force close
+      // so onclose fires and the reconnect loop kicks in.
+      try { appState.ws.close(); } catch {}
+      return;
+    }
+    try {
+      appState.ws.send(JSON.stringify({ type: 'ping' }));
+    } catch {
+      // Send failed — connection is broken. onclose will handle reconnect.
+    }
+  }, PING_INTERVAL_MS);
+}
+
+function forceReconnectIfDead() {
+  if (appState.ws && appState.ws.readyState === WebSocket.OPEN) return;
+  if (reconnectTimeoutId !== null) {
+    clearTimeout(reconnectTimeoutId);
+    reconnectTimeoutId = null;
+  }
+  appState.reconnectAttempts = 0;
+  if (appState.ws && appState.ws.readyState !== WebSocket.CLOSED) {
+    try { appState.ws.close(); } catch {}
+  } else {
+    connectWebSocket();
+  }
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') forceReconnectIfDead();
+  });
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('focus', forceReconnectIfDead);
+  window.addEventListener('online', forceReconnectIfDead);
+}
 
 function setConnectionStatus(state, label) {
   const el = document.getElementById('connection-status');
@@ -56,18 +112,28 @@ export function connectWebSocket() {
     clearInterval(reconnectCountdownInterval);
     setConnectionStatus('connected', '');
     appState.reconnectAttempts = 0;
+    startPinging();
   };
 
   appState.ws.onclose = () => {
+    stopPinging();
+    if (reconnectTimeoutId !== null) clearTimeout(reconnectTimeoutId);
     const delay = Math.min(1000 * Math.pow(2, appState.reconnectAttempts++), 30000);
     startReconnectCountdown(delay);
-    setTimeout(connectWebSocket, delay);
+    reconnectTimeoutId = setTimeout(() => {
+      reconnectTimeoutId = null;
+      connectWebSocket();
+    }, delay);
   };
 
   appState.ws.onerror = () => {}; // onclose fires after onerror
 
   appState.ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
+    if (msg.type === 'pong') {
+      lastPongAt = Date.now();
+      return;
+    }
     if (msg.type === 'state') {
       if (msg.data.detailIds) appState.detailIds = new Set(msg.data.detailIds);
       appState.subItemCache.clear();

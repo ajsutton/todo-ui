@@ -245,6 +245,40 @@ describe("server integration", () => {
     expect(todo1!.doneDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
+  it("WebSocket replies with pong to ping", async () => {
+    const ws = new WebSocket(`ws://localhost:${port}/ws`);
+    const messages: string[] = [];
+
+    const gotPong = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("WS pong timeout")), 5000);
+      ws.onmessage = (ev) => {
+        const data = String(ev.data);
+        messages.push(data);
+        const parsed = JSON.parse(data) as { type: string };
+        if (parsed.type === "pong") {
+          clearTimeout(timer);
+          resolve();
+        }
+      };
+      ws.onerror = () => {
+        clearTimeout(timer);
+        reject(new Error("WebSocket error"));
+      };
+    });
+
+    await new Promise<void>((resolve) => {
+      const check = () => {
+        if (messages.length >= 1) resolve();
+        else setTimeout(check, 50);
+      };
+      check();
+    });
+
+    ws.send(JSON.stringify({ type: "ping" }));
+    await gotPong;
+    ws.close();
+  });
+
   it("GET /api/standup returns standup report structure", async () => {
     const res = await fetch(`http://localhost:${port}/api/standup`);
     expect(res.status).toBe(200);

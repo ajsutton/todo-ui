@@ -638,6 +638,10 @@ const server = Bun.serve({
           type?: string;
           id?: string;
         };
+        if (parsed.type === "ping") {
+          ws.send(JSON.stringify({ type: "pong" } satisfies WsMessage));
+          return;
+        }
         if (parsed.type === "getDetail" && parsed.id) {
           const detail = watcher.getDetail(parsed.id);
           if (detail) {

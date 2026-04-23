@@ -76,4 +76,5 @@ export type WsMessage =
   | { type: "update-progress"; data: { current: number; total: number; phase: string; itemId?: string } }
   | { type: "pending-discovered"; data: { items: DiscoveredItem[]; timestamp: string } }
   | { type: "items-auto-added"; data: { count: number; items: DiscoveredItem[] } }
-  | { type: "reload" };
+  | { type: "reload" }
+  | { type: "pong" };
