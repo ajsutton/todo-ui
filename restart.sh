@@ -3,12 +3,19 @@
 # Uses the same env vars as compose.d/todo-ui.sh.
 set -euo pipefail
 
+cd "$(dirname "$0")"
+
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
+fi
+
 TODO_DIR="${TODO_DIR:-${CLAUDE_CWD:-$(pwd)}/plans/todo}"
 CLAUDE_CWD="${CLAUDE_CWD:-$(pwd)}"
 TODO_UI_PORT="${TODO_UI_PORT:-3456}"
 LOG="/tmp/todo-ui.log"
-
-cd "$(dirname "$0")"
 
 # Resolve bun via mise so this works without mise shell activation.
 if ! command -v bun >/dev/null 2>&1; then
